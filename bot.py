@@ -1,21 +1,71 @@
 import discord
 from discord.ext import commands
-from discord.ui import View, Button, Modal, TextInput
+from discord.ui import View, Modal, TextInput
 from datetime import timedelta
 import random
 import re
 import os
 from dotenv import load_dotenv
 
+
+# =========================================================
+# INTENTS
+# =========================================================
+
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-bot = commands.Bot(
+
+# =========================================================
+# TÜRKÇE KARAKTER NORMALİZASYONU
+# =========================================================
+
+def komut_normalize(metin):
+
+    cevir = str.maketrans({
+        "ı": "i",
+        "İ": "i",
+        "ö": "o",
+        "Ö": "o",
+        "ü": "u",
+        "Ü": "u",
+        "ş": "s",
+        "Ş": "s",
+        "ç": "c",
+        "Ç": "c",
+        "ğ": "g",
+        "Ğ": "g"
+    })
+
+    return metin.translate(cevir).lower()
+
+
+class PremierBot(commands.Bot):
+
+    def get_command(self, name):
+
+        normal_name = komut_normalize(name)
+
+        for command in self.commands:
+
+            if komut_normalize(command.name) == normal_name:
+                return command
+
+            for alias in command.aliases:
+
+                if komut_normalize(alias) == normal_name:
+                    return command
+
+        return None
+
+
+bot = PremierBot(
     command_prefix=".",
     intents=intents,
     help_command=None
 )
+
 
 # =========================================================
 # ROLLER
@@ -25,12 +75,14 @@ YONETIM_ROL_ID = 1553136364789309552
 EKLE_SIL_ROL_ID = 1553136385538654329
 MUTE_ROL_ID = 1553136389984358552
 
+
 # =========================================================
 # KANALLAR
 # =========================================================
 
 ANT_KANAL_ID = 1553136962473304156
 PEN_KANAL_ID = 1553136964042227722
+
 
 # =========================================================
 # VERİLER
@@ -43,6 +95,7 @@ antrenman = {}
 ant_son_kullanim = {}
 
 pen_son_kullanim = {}
+
 
 # =========================================================
 # STATLAR
@@ -82,6 +135,7 @@ STATLAR = [
     "Kaleci Pozisyon Alma",
     "Kaleci Refleksler"
 ]
+
 
 # =========================================================
 # YARDIMCI FONKSİYONLAR
@@ -313,7 +367,7 @@ class IstatistikView(View):
 
 
 # =========================================================
-# HAFTALIK LİDERLİK EMBED
+# HAFTALIK LİDERLİK
 # =========================================================
 
 def haftalik_liderlik_embed(page=0):
@@ -539,9 +593,7 @@ class SebepModal(
         interaction
     ):
 
-        self.request_data[
-            "sebep"
-        ] = self.sebep.value
+        self.request_data["sebep"] = self.sebep.value
 
         await interaction.response.edit_message(
             embed=ekle_onay_embed(
@@ -639,11 +691,9 @@ class EkleOnayView(View):
 
         oyuncu = self.data["oyuncu"]
 
+        # SADECE HAFTALIK
         if oyuncu.id not in haftalik:
             haftalik[oyuncu.id] = {}
-
-        if oyuncu.id not in all_time:
-            all_time[oyuncu.id] = {}
 
         for isim, deger in self.data["statlar"].items():
 
@@ -654,18 +704,11 @@ class EkleOnayView(View):
                 ) + deger
             )
 
-            all_time[oyuncu.id][isim] = (
-                all_time[oyuncu.id].get(
-                    isim,
-                    0
-                ) + deger
-            )
-
         embed = discord.Embed(
             title="✅ STATLAR ONAYLANDI",
             description=(
                 f"{oyuncu.mention} oyuncusuna "
-                "statlar başarıyla eklendi."
+                "haftalık statlar başarıyla eklendi."
             ),
             color=discord.Color.green()
         )
@@ -772,14 +815,7 @@ async def s(
 # .haftalik
 # =========================================================
 
-@bot.command(
-    aliases=[
-        "haftalık",
-        "Haftalik",
-        "Haftalık",
-        "HAFTALIK"
-    ]
-)
+@bot.command()
 async def haftalik_cmd(ctx):
 
     embed = haftalik_liderlik_embed(0)
@@ -928,7 +964,7 @@ async def sil(
 
     for stat in STATLAR:
 
-        if stat.lower() in statlar.lower():
+        if komut_normalize(stat) in komut_normalize(statlar):
             bulunan.append(stat)
 
     if not bulunan:
@@ -947,15 +983,11 @@ async def sil(
 
             if haftalik[uye.id][stat] <= 0:
 
-                del haftalik[
-                    uye.id
-                ][stat]
+                del haftalik[uye.id][stat]
 
     if not haftalik[uye.id]:
 
-        del haftalik[
-            uye.id
-        ]
+        del haftalik[uye.id]
 
     await ctx.send(
         f"✅ {uye.mention} oyuncusundan haftalık stat düşürüldü."
@@ -966,13 +998,7 @@ async def sil(
 # .haftaliksifirla
 # =========================================================
 
-@bot.command(
-    aliases=[
-        "haftaliksıfırla",
-        "HaftalikSifirla",
-        "HaftalıkSıfırla"
-    ]
-)
+@bot.command()
 async def haftaliksifirla(
     ctx,
     uye: discord.Member = None
@@ -1011,13 +1037,7 @@ async def haftaliksifirla(
 # .alltimesifirla
 # =========================================================
 
-@bot.command(
-    aliases=[
-        "alltimesıfırla",
-        "AllTimeSifirla",
-        "AllTimeSıfırla"
-    ]
-)
+@bot.command()
 async def alltimesifirla(
     ctx,
     uye: discord.Member = None
@@ -1104,7 +1124,7 @@ async def alltimesil(
 
     for stat in STATLAR:
 
-        if stat.lower() in statlar.lower():
+        if komut_normalize(stat) in komut_normalize(statlar):
             bulunan.append(stat)
 
     if not bulunan:
@@ -1123,15 +1143,11 @@ async def alltimesil(
 
             if all_time[uye.id][stat] <= 0:
 
-                del all_time[
-                    uye.id
-                ][stat]
+                del all_time[uye.id][stat]
 
     if not all_time[uye.id]:
 
-        del all_time[
-            uye.id
-        ]
+        del all_time[uye.id]
 
     await ctx.send(
         f"✅ {uye.mention} oyuncusunun All Time statı düşürüldü."
@@ -1232,16 +1248,12 @@ async def ban(
     try:
 
         await uye.ban(
-            reason=(
-                f"{ctx.author} tarafından banlandı."
-            )
+            reason=f"{ctx.author} tarafından banlandı."
         )
 
         embed = discord.Embed(
             title="🔨 Oyuncu Banlandı",
-            description=(
-                f"{uye.mention} sunucudan banlandı."
-            ),
+            description=f"{uye.mention} sunucudan banlandı.",
             color=discord.Color.red()
         )
 
@@ -1301,16 +1313,12 @@ async def unban(
 
         await ctx.guild.unban(
             user,
-            reason=(
-                f"{ctx.author} tarafından unban."
-            )
+            reason=f"{ctx.author} tarafından unban."
         )
 
         embed = discord.Embed(
             title="🔓 Ban Kaldırıldı",
-            description=(
-                f"**{user}** kullanıcısının banı kaldırıldı."
-            ),
+            description=f"**{user}** kullanıcısının banı kaldırıldı.",
             color=discord.Color.green()
         )
 
@@ -1370,16 +1378,12 @@ async def mute(
 
         await uye.timeout(
             timedelta(minutes=5),
-            reason=(
-                f"{ctx.author} tarafından 5 dakika mute."
-            )
+            reason=f"{ctx.author} tarafından 5 dakika mute."
         )
 
         embed = discord.Embed(
             title="🔇 Oyuncu Susturuldu",
-            description=(
-                f"{uye.mention} **5 dakika** boyunca susturuldu."
-            ),
+            description=f"{uye.mention} **5 dakika** boyunca susturuldu.",
             color=discord.Color.orange()
         )
 
@@ -1427,16 +1431,12 @@ async def unmute(
 
         await uye.timeout(
             None,
-            reason=(
-                f"{ctx.author} tarafından mute kaldırıldı."
-            )
+            reason=f"{ctx.author} tarafından mute kaldırıldı."
         )
 
         embed = discord.Embed(
             title="🔊 Oyuncunun Mute'u Kaldırıldı",
-            description=(
-                f"{uye.mention} artık susturulmuyor."
-            ),
+            description=f"{uye.mention} artık susturulmuyor.",
             color=discord.Color.green()
         )
 
@@ -1503,22 +1503,15 @@ async def ant(ctx):
         return
 
     simdi = discord.utils.utcnow()
-
     user_id = ctx.author.id
 
     if user_id in ant_son_kullanim:
 
-        fark = (
-            simdi -
-            ant_son_kullanim[user_id]
-        )
+        fark = simdi - ant_son_kullanim[user_id]
 
         if fark.total_seconds() < 3600:
 
-            kalan = (
-                3600 -
-                int(fark.total_seconds())
-            )
+            kalan = 3600 - int(fark.total_seconds())
 
             dakika = kalan // 60
             saniye = kalan % 60
@@ -1533,28 +1526,18 @@ async def ant(ctx):
                 color=discord.Color.orange()
             )
 
-            await ctx.send(
-                embed=embed
-            )
+            await ctx.send(embed=embed)
 
             return
 
     ant_son_kullanim[user_id] = simdi
 
-    mevcut = (
-        antrenman.get(
-            user_id,
-            0
-        ) + 1
-    )
+    mevcut = antrenman.get(user_id, 0) + 1
 
     antrenman[user_id] = mevcut
 
     dolu = "🟩" * mevcut
-
-    bos = "⬜" * (
-        10 - mevcut
-    )
+    bos = "⬜" * (10 - mevcut)
 
     if mevcut >= 10:
 
@@ -1610,22 +1593,15 @@ async def pen(ctx):
         return
 
     simdi = discord.utils.utcnow()
-
     user_id = ctx.author.id
 
     if user_id in pen_son_kullanim:
 
-        fark = (
-            simdi -
-            pen_son_kullanim[user_id]
-        )
+        fark = simdi - pen_son_kullanim[user_id]
 
         if fark.total_seconds() < 3600:
 
-            kalan = (
-                3600 -
-                int(fark.total_seconds())
-            )
+            kalan = 3600 - int(fark.total_seconds())
 
             dakika = kalan // 60
             saniye = kalan % 60
@@ -1640,9 +1616,7 @@ async def pen(ctx):
                 color=discord.Color.orange()
             )
 
-            await ctx.send(
-                embed=embed
-            )
+            await ctx.send(embed=embed)
 
             return
 
