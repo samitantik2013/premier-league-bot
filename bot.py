@@ -254,6 +254,9 @@ async def ekle(
 
 def yetkili_mi(ctx):
 
+    if ctx.guild is None:
+        return False
+
     rol = ctx.guild.get_role(
         HAFTALIK_SIFIRLAMA_ROL_ID
     )
@@ -290,6 +293,7 @@ async def haftalik_sifirla_islemi(ctx, uye=None):
 
         return
 
+    # Kullanıcı yoksa hata verme
     if uye is None:
 
         await ctx.send(
@@ -350,6 +354,7 @@ async def all_time_sifirla_islemi(ctx, uye=None):
 
         return
 
+    # Kullanıcı yoksa hata verme
     if uye is None:
 
         await ctx.send(
@@ -431,6 +436,7 @@ async def aktar(
             all_time[uye.id].get(isim, 0) + deger
         )
 
+    # Aktardıktan sonra haftalığı sil
     haftalik.pop(uye.id, None)
 
     await ctx.send(
@@ -438,6 +444,40 @@ async def aktar(
         f"**Haftalık nitelikleri All Time'a aktarıldı.**\n"
         f"Haftalık verileri silindi."
     )
+
+
+# =========================
+# HATALI KOMUTLAR
+# =========================
+
+@bot.event
+async def on_command_error(ctx, error):
+
+    if isinstance(
+        error,
+        commands.MissingRequiredArgument
+    ):
+
+        await ctx.send(
+            "❌ Eksik bilgi girdin. "
+            "Kullanımı kontrol et."
+        )
+
+        return
+
+    if isinstance(
+        error,
+        commands.MemberNotFound
+    ):
+
+        await ctx.send(
+            "❌ Kullanıcı bulunamadı. "
+            "Kullanıcıyı etiketlediğinden emin ol."
+        )
+
+        return
+
+    print(f"Komut hatası: {error}")
 
 
 # =========================
