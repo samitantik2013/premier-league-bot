@@ -82,6 +82,8 @@ MUTE_ROL_ID = 1553136389984358552
 
 ANT_KANAL_ID = 1553136962473304156
 PEN_KANAL_ID = 1553136964042227722
+
+# EKLE / SİL LOG KANALI
 LOG_KANAL_ID = 1556078549176426546
 
 
@@ -168,6 +170,7 @@ def haftalik_siralama():
         toplam = toplam_stat(statlar)
 
         if toplam > 0:
+
             siralama.append(
                 (user_id, toplam)
             )
@@ -193,19 +196,41 @@ def haftalik_sira_bul(user_id):
 
     return None
 
+
+# =========================================================
+# STAT LOG GÖNDERME
+# =========================================================
+
 async def stat_log_gonder(embed):
+
     kanal = bot.get_channel(LOG_KANAL_ID)
 
     if kanal is None:
+
         try:
-            kanal = await bot.fetch_channel(LOG_KANAL_ID)
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+
+            kanal = await bot.fetch_channel(
+                LOG_KANAL_ID
+            )
+
+        except (
+            discord.NotFound,
+            discord.Forbidden,
+            discord.HTTPException
+        ):
+
             return
 
     try:
-        await kanal.send(embed=embed)
+
+        await kanal.send(
+            embed=embed
+        )
+
     except discord.HTTPException:
+
         pass
+
 
 # =========================================================
 # İSTATİSTİK EMBED
@@ -213,7 +238,10 @@ async def stat_log_gonder(embed):
 
 def istatistik_embed(user):
 
-    statlar = all_time.get(user.id, {})
+    statlar = all_time.get(
+        user.id,
+        {}
+    )
 
     embed = discord.Embed(
         title=f"⚽ {user.display_name} - İstatistikler",
@@ -262,15 +290,23 @@ def istatistik_embed(user):
 
 def haftalik_embed(user):
 
-    statlar = haftalik.get(user.id, {})
+    statlar = haftalik.get(
+        user.id,
+        {}
+    )
 
     toplam = toplam_stat(statlar)
 
-    sira = haftalik_sira_bul(user.id)
+    sira = haftalik_sira_bul(
+        user.id
+    )
 
     if sira is None:
+
         sira_text = "Sıralamada değil"
+
     else:
+
         sira_text = f"🏆 Haftalıkta **{sira}. sıra**"
 
     embed = discord.Embed(
@@ -350,7 +386,9 @@ class IstatistikView(View):
             return
 
         await interaction.response.edit_message(
-            embed=haftalik_embed(self.user),
+            embed=haftalik_embed(
+                self.user
+            ),
             view=self
         )
 
@@ -375,7 +413,9 @@ class IstatistikView(View):
             return
 
         await interaction.response.edit_message(
-            embed=istatistik_embed(self.user),
+            embed=istatistik_embed(
+                self.user
+            ),
             view=self
         )
 
@@ -447,7 +487,9 @@ def haftalik_liderlik_embed(page=0):
         start=baslangic + 1
     ):
 
-        uye = bot.get_user(user_id)
+        uye = bot.get_user(
+            user_id
+        )
 
         if uye is not None:
             isim = uye.display_name
@@ -455,15 +497,19 @@ def haftalik_liderlik_embed(page=0):
             isim = f"<@{user_id}>"
 
         if index == 1:
+
             sira_emoji = "🥇"
 
         elif index == 2:
+
             sira_emoji = "🥈"
 
         elif index == 3:
+
             sira_emoji = "🥉"
 
         else:
+
             sira_emoji = f"`#{index}`"
 
         satirlar.append(
@@ -586,6 +632,7 @@ class SebepModal(
 ):
 
     def __init__(self, request_data):
+
         super().__init__()
 
         self.request_data = request_data
@@ -597,9 +644,14 @@ class SebepModal(
             max_length=500
         )
 
-        self.add_item(self.sebep)
+        self.add_item(
+            self.sebep
+        )
 
-    async def on_submit(self, interaction):
+    async def on_submit(
+        self,
+        interaction
+    ):
 
         self.request_data["sebep"] = self.sebep.value
 
@@ -617,10 +669,63 @@ class SebepModal(
 # EKLEME ONAY EMBED
 # =========================================================
 
+def ekle_onay_embed(data):
+
+    oyuncu = data["oyuncu"]
+
+    statlar = data["statlar"]
+
+    sebep = data.get(
+        "sebep",
+        "Belirtilmedi"
+    )
+
+    metin = "\n".join(
+        f"**{isim}:** `+{deger}`"
+        for isim, deger in statlar.items()
+    )
+
+    embed = discord.Embed(
+        title="📝 STAT EKLEME TALEBİ",
+        color=discord.Color.orange()
+    )
+
+    embed.add_field(
+        name="👤 Oyuncu",
+        value=oyuncu.mention,
+        inline=False
+    )
+
+    embed.add_field(
+        name="🎯 Eklenecek Statlar",
+        value=metin,
+        inline=False
+    )
+
+    embed.add_field(
+        name="📋 Sebep",
+        value=sebep,
+        inline=False
+    )
+
+    embed.set_footer(
+        text="Premier Support • Stat Onay Sistemi"
+    )
+
+    return embed
+
+
+# =========================================================
+# SADECE SEBEP GİR BUTONU
+# =========================================================
+
 class EkleSebepView(View):
 
     def __init__(self, data):
-        super().__init__(timeout=300)
+
+        super().__init__(
+            timeout=300
+        )
 
         self.data = data
 
@@ -645,61 +750,11 @@ class EkleSebepView(View):
             return
 
         await interaction.response.send_modal(
-            SebepModal(self.data)
-        )
-
-        # =========================
-        # ONAY MESAJI
-        # =========================
-
-        embed = discord.Embed(
-            title="✅ STATLAR ONAYLANDI",
-            description=(
-                f"{oyuncu.mention} oyuncusuna "
-                "haftalık statlar başarıyla eklendi."
-            ),
-            color=discord.Color.green()
-        )
-
-        embed.set_footer(
-            text="Premier Support • Stat Sistemi"
-        )
-
-        await interaction.response.edit_message(
-            embed=embed,
-            view=None
-        )
-
-    @discord.ui.button(
-        label="İptal Et",
-        emoji="❌",
-        style=discord.ButtonStyle.danger
-    )
-    async def iptal(
-        self,
-        interaction,
-        button
-    ):
-
-        if interaction.user.id != self.data["isteyen"]:
-
-            await interaction.response.send_message(
-                "❌ Bu talebi sadece komutu kullanan kişi iptal edebilir.",
-                ephemeral=True
+            SebepModal(
+                self.data
             )
-
-            return
-
-        embed = discord.Embed(
-            title="❌ STAT TALEBİ İPTAL EDİLDİ",
-            description="Herhangi bir stat eklenmedi.",
-            color=discord.Color.red()
         )
 
-        await interaction.response.edit_message(
-            embed=embed,
-            view=None
-        )
 
 # =========================================================
 # EKLEME ONAY BUTONLARI
@@ -739,6 +794,7 @@ class EkleOnayView(View):
 
         # SADECE HAFTALIK
         if oyuncu.id not in haftalik:
+
             haftalik[oyuncu.id] = {}
 
         for isim, deger in self.data["statlar"].items():
@@ -749,6 +805,75 @@ class EkleOnayView(View):
                     0
                 ) + deger
             )
+
+        # =================================================
+        # LOG
+        # =================================================
+
+        stat_metni = "\n".join(
+            f"**{isim}:** `+{deger}`"
+            for isim, deger in self.data["statlar"].items()
+        )
+
+        simdi = discord.utils.utcnow()
+
+        timestamp = int(
+            simdi.timestamp()
+        )
+
+        log_embed = discord.Embed(
+            title="📈 STAT EKLENDİ",
+            color=discord.Color.green()
+        )
+
+        log_embed.add_field(
+            name="👤 İşlemi Yapan",
+            value=interaction.user.mention,
+            inline=True
+        )
+
+        log_embed.add_field(
+            name="🎯 Oyuncu",
+            value=oyuncu.mention,
+            inline=True
+        )
+
+        log_embed.add_field(
+            name="📊 Eklenen Nitelikler",
+            value=stat_metni,
+            inline=False
+        )
+
+        log_embed.add_field(
+            name="📋 Sebep",
+            value=self.data["sebep"],
+            inline=False
+        )
+
+        log_embed.add_field(
+            name="🕒 Zaman",
+            value=(
+                f"<t:{timestamp}:F>\n"
+                f"<t:{timestamp}:R>"
+            ),
+            inline=False
+        )
+
+        log_embed.set_thumbnail(
+            url=oyuncu.display_avatar.url
+        )
+
+        log_embed.set_footer(
+            text="Premier Support • Stat Log"
+        )
+
+        await stat_log_gonder(
+            log_embed
+        )
+
+        # =================================================
+        # ONAY MESAJI
+        # =================================================
 
         embed = discord.Embed(
             title="✅ STATLAR ONAYLANDI",
@@ -797,32 +922,6 @@ class EkleOnayView(View):
         await interaction.response.edit_message(
             embed=embed,
             view=None
-        )
-
-    @discord.ui.button(
-        label="Sebep Gir",
-        emoji="📝",
-        style=discord.ButtonStyle.primary
-    )
-    async def sebep_gir(
-        self,
-        interaction,
-        button
-    ):
-
-        if interaction.user.id != self.data["isteyen"]:
-
-            await interaction.response.send_message(
-                "❌ Bu butonu sadece komutu kullanan kişi kullanabilir.",
-                ephemeral=True
-            )
-
-            return
-
-        await interaction.response.send_modal(
-            SebepModal(
-                self.data
-            )
         )
 
 
@@ -864,7 +963,9 @@ async def s(
 @bot.command()
 async def haftalik_cmd(ctx):
 
-    embed = haftalik_liderlik_embed(0)
+    embed = haftalik_liderlik_embed(
+        0
+    )
 
     await ctx.send(
         embed=embed,
@@ -952,10 +1053,16 @@ async def ekle(
         "sebep": "Belirtilmedi"
     }
 
-  await ctx.send(
-    embed=ekle_onay_embed(data),
-    view=EkleSebepView(data)
-)
+    # İLK AŞAMADA SADECE SEBEP GİR
+    await ctx.send(
+        embed=ekle_onay_embed(
+            data
+        ),
+        view=EkleSebepView(
+            data
+        )
+    )
+
 
 # =========================================================
 # .sil
@@ -1010,7 +1117,10 @@ async def sil(
     for stat in STATLAR:
 
         if komut_normalize(stat) in komut_normalize(statlar):
-            bulunan.append(stat)
+
+            bulunan.append(
+                stat
+            )
 
     if not bulunan:
 
@@ -1020,7 +1130,7 @@ async def sil(
 
         return
 
-    # Gerçekten silinen statları tut
+    # GERÇEKTEN SİLİNENLER
     silinenler = {}
 
     for stat in bulunan:
@@ -1045,11 +1155,13 @@ async def sil(
 
     if not haftalik[uye.id]:
 
-        del haftalik[uye.id]
+        del haftalik[
+            uye.id
+        ]
 
-    # =========================
+    # =================================================
     # LOG
-    # =========================
+    # =================================================
 
     stat_metni = "\n".join(
         f"**{isim}:** `-{deger}`"
@@ -1057,7 +1169,10 @@ async def sil(
     )
 
     simdi = discord.utils.utcnow()
-    timestamp = int(simdi.timestamp())
+
+    timestamp = int(
+        simdi.timestamp()
+    )
 
     log_embed = discord.Embed(
         title="📉 STAT SİLİNDİ",
@@ -1099,11 +1214,14 @@ async def sil(
         text="Premier Support • Stat Log"
     )
 
-    await stat_log_gonder(log_embed)
+    await stat_log_gonder(
+        log_embed
+    )
 
     await ctx.send(
         f"✅ {uye.mention} oyuncusundan haftalık stat düşürüldü."
     )
+
 
 # =========================================================
 # .haftaliksifirla
@@ -1236,7 +1354,10 @@ async def alltimesil(
     for stat in STATLAR:
 
         if komut_normalize(stat) in komut_normalize(statlar):
-            bulunan.append(stat)
+
+            bulunan.append(
+                stat
+            )
 
     if not bulunan:
 
@@ -1258,7 +1379,9 @@ async def alltimesil(
 
     if not all_time[uye.id]:
 
-        del all_time[uye.id]
+        del all_time[
+            uye.id
+        ]
 
     await ctx.send(
         f"✅ {uye.mention} oyuncusunun All Time statı düşürüldü."
@@ -1303,6 +1426,7 @@ async def aktar(
         return
 
     if uye.id not in all_time:
+
         all_time[uye.id] = {}
 
     for stat, deger in haftalik[uye.id].items():
@@ -1414,6 +1538,7 @@ async def unban(
     )
 
     if match:
+
         kullanici_id = match.group(1)
 
     try:
@@ -1567,7 +1692,11 @@ async def unmute(
 # =========================================================
 
 @bot.command()
-async def gonder(ctx, *, mesaj):
+async def gonder(
+    ctx,
+    *,
+    mesaj
+):
 
     if not rol_var_mi(
         ctx,
@@ -1614,15 +1743,22 @@ async def ant(ctx):
         return
 
     simdi = discord.utils.utcnow()
+
     user_id = ctx.author.id
 
     if user_id in ant_son_kullanim:
 
-        fark = simdi - ant_son_kullanim[user_id]
+        fark = (
+            simdi -
+            ant_son_kullanim[user_id]
+        )
 
         if fark.total_seconds() < 3600:
 
-            kalan = 3600 - int(fark.total_seconds())
+            kalan = (
+                3600 -
+                int(fark.total_seconds())
+            )
 
             dakika = kalan // 60
             saniye = kalan % 60
@@ -1637,18 +1773,28 @@ async def ant(ctx):
                 color=discord.Color.orange()
             )
 
-            await ctx.send(embed=embed)
+            await ctx.send(
+                embed=embed
+            )
 
             return
 
     ant_son_kullanim[user_id] = simdi
 
-    mevcut = antrenman.get(user_id, 0) + 1
+    mevcut = (
+        antrenman.get(
+            user_id,
+            0
+        ) + 1
+    )
 
     antrenman[user_id] = mevcut
 
     dolu = "🟩" * mevcut
-    bos = "⬜" * (10 - mevcut)
+
+    bos = "⬜" * (
+        10 - mevcut
+    )
 
     if mevcut >= 10:
 
@@ -1704,15 +1850,22 @@ async def pen(ctx):
         return
 
     simdi = discord.utils.utcnow()
+
     user_id = ctx.author.id
 
     if user_id in pen_son_kullanim:
 
-        fark = simdi - pen_son_kullanim[user_id]
+        fark = (
+            simdi -
+            pen_son_kullanim[user_id]
+        )
 
         if fark.total_seconds() < 3600:
 
-            kalan = 3600 - int(fark.total_seconds())
+            kalan = (
+                3600 -
+                int(fark.total_seconds())
+            )
 
             dakika = kalan // 60
             saniye = kalan % 60
@@ -1727,7 +1880,9 @@ async def pen(ctx):
                 color=discord.Color.orange()
             )
 
-            await ctx.send(embed=embed)
+            await ctx.send(
+                embed=embed
+            )
 
             return
 
@@ -1820,6 +1975,9 @@ async def pen(ctx):
 
 load_dotenv()
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv(
+    "DISCORD_TOKEN"
+)
+
 
 bot.run(TOKEN)
