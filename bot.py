@@ -1,5 +1,6 @@
 import os
 import re
+import random
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -13,9 +14,13 @@ bot = commands.Bot(command_prefix=".", intents=intents)
 
 haftalik = {}
 all_time = {}
+antrenman = {}
 
 YONETIM_ROL_ID = 1553136364789309552
 EKLE_SIL_ROL_ID = 1553136385538654329
+
+ANT_KANAL_ID = 1553136962473304156
+PEN_KANAL_ID = 1553136964042227722
 
 NITELIKLER = [
     "Orta Açma",
@@ -573,13 +578,11 @@ async def sil(ctx, uye: discord.Member, *, veriler: str):
             return
 
         mevcut = veriler_dict[isim]
-
         yeni_deger = mevcut - deger
 
         if yeni_deger <= 0:
             del veriler_dict[isim]
             yeni_deger = 0
-
         else:
             veriler_dict[isim] = yeni_deger
 
@@ -616,7 +619,6 @@ def kullaniciyi_bul(ctx, metin):
     )
 
     if match:
-
         user_id = int(match.group(1))
         uye = ctx.guild.get_member(user_id)
 
@@ -626,10 +628,7 @@ def kullaniciyi_bul(ctx, metin):
         return None
 
     if metin.isdigit():
-
-        uye = ctx.guild.get_member(
-            int(metin)
-        )
+        uye = ctx.guild.get_member(int(metin))
 
         if uye:
             return uye
@@ -686,20 +685,12 @@ async def haftalik_sifirla_islemi(ctx, metin):
 
 @bot.command(name="haftaliksifirla")
 async def haftaliksifirla(ctx, *, metin=None):
-
-    await haftalik_sifirla_islemi(
-        ctx,
-        metin
-    )
+    await haftalik_sifirla_islemi(ctx, metin)
 
 
 @bot.command(name="haftaliksıfırla")
 async def haftaliksifirla_2(ctx, *, metin=None):
-
-    await haftalik_sifirla_islemi(
-        ctx,
-        metin
-    )
+    await haftalik_sifirla_islemi(ctx, metin)
 
 
 # =========================
@@ -751,20 +742,12 @@ async def all_time_sifirla_islemi(ctx, metin):
 
 @bot.command(name="alltimesifirla")
 async def alltimesifirla(ctx, *, metin=None):
-
-    await all_time_sifirla_islemi(
-        ctx,
-        metin
-    )
+    await all_time_sifirla_islemi(ctx, metin)
 
 
 @bot.command(name="alltimesıfırla")
 async def alltimesifirla_2(ctx, *, metin=None):
-
-    await all_time_sifirla_islemi(
-        ctx,
-        metin
-    )
+    await all_time_sifirla_islemi(ctx, metin)
 
 
 # =========================
@@ -816,13 +799,11 @@ async def alltimesil(ctx, uye: discord.Member, *, veriler: str):
             return
 
         mevcut = veriler_dict[isim]
-
         yeni_deger = mevcut - deger
 
         if yeni_deger <= 0:
             del veriler_dict[isim]
             yeni_deger = 0
-
         else:
             veriler_dict[isim] = yeni_deger
 
@@ -871,7 +852,6 @@ async def aktar(ctx, uye: discord.Member = None):
         all_time[uye.id] = {}
 
     for isim, deger in veriler.items():
-
         all_time[uye.id][isim] = (
             all_time[uye.id].get(isim, 0) + deger
         )
@@ -886,25 +866,169 @@ async def aktar(ctx, uye: discord.Member = None):
 
 
 # =========================
+# .ANT
+# =========================
+
+@bot.command()
+async def ant(ctx):
+
+    if ctx.channel.id != ANT_KANAL_ID:
+        await ctx.send(
+            f"❌ Bu komut sadece <#{ANT_KANAL_ID}> kanalında kullanılabilir."
+        )
+        return
+
+    user_id = ctx.author.id
+
+    mevcut = antrenman.get(user_id, 0) + 1
+    antrenman[user_id] = mevcut
+
+    dolu = "🟩" * mevcut
+    bos = "⬜" * (10 - mevcut)
+
+    embed = discord.Embed(
+        title="🏋️ ANTRENMAN",
+        description=(
+            f"**{ctx.author.display_name}** antrenmana başladı!\n\n"
+            f"📊 **İlerleme**\n"
+            f"{dolu}{bos}\n\n"
+            f"**{mevcut}/10**"
+        ),
+        color=discord.Color.green()
+    )
+
+    if mevcut == 10:
+
+        embed.color = discord.Color.gold()
+
+        embed.add_field(
+            name="🏆 ANTRENMAN TAMAMLANDI!",
+            value=(
+                "🔥 **10/10 tamamlandı!**\n"
+                "Oyuncu antrenmanı başarıyla bitirdi.\n\n"
+                "🔄 Sayaç otomatik olarak sıfırlandı."
+            ),
+            inline=False
+        )
+
+        antrenman[user_id] = 0
+
+    else:
+
+        embed.add_field(
+            name="💪 Devam Et!",
+            value=(
+                f"Bir sonraki antrenman: **{mevcut + 1}/10**\n"
+                "10/10'a ulaşınca sayaç sıfırlanır."
+            ),
+            inline=False
+        )
+
+    embed.set_footer(
+        text="Premier Support • Antrenman Sistemi"
+    )
+
+    await ctx.send(embed=embed)
+
+
+# =========================
+# .PEN
+# =========================
+
+@bot.command()
+async def pen(ctx):
+
+    if ctx.channel.id != PEN_KANAL_ID:
+        await ctx.send(
+            f"❌ Bu komut sadece <#{PEN_KANAL_ID}> kanalında kullanılabilir."
+        )
+        return
+
+    sonuc = random.choice([
+        "gol",
+        "kaleci",
+        "direk",
+        "aut"
+    ])
+
+    embed = discord.Embed(
+        color=discord.Color.blurple()
+    )
+
+    embed.add_field(
+        name="👤 Penaltıyı Kullanan",
+        value=ctx.author.mention,
+        inline=False
+    )
+
+    embed.add_field(
+        name="🎲 Penaltı Olasılıkları",
+        value=(
+            "⚽ **Gol:** %25\n"
+            "🧤 **Kaleci Kurtarır:** %25\n"
+            "💥 **Direk:** %25\n"
+            "💨 **Aut:** %25"
+        ),
+        inline=False
+    )
+
+    if sonuc == "gol":
+
+        embed.title = "⚽ GOOOOOL!"
+        embed.description = (
+            "🔥 **TOP AĞLARDA!**\n"
+            "Kaleci çaresiz kaldı."
+        )
+        embed.color = discord.Color.green()
+
+    elif sonuc == "kaleci":
+
+        embed.title = "🧤 KALECİ KURTARDI!"
+        embed.description = (
+            "🧤 **HARİKA KURTARIŞ!**\n"
+            "Kaleci penaltıyı çıkardı."
+        )
+        embed.color = discord.Color.blue()
+
+    elif sonuc == "direk":
+
+        embed.title = "💥 DİREK!"
+        embed.description = (
+            "💥 **DİREKTEN DÖNDÜ!**\n"
+            "İnanılmaz şanssızlık."
+        )
+        embed.color = discord.Color.orange()
+
+    else:
+
+        embed.title = "💨 AUT!"
+        embed.description = (
+            "💨 **TOP AUTA GİTTİ!**\n"
+            "Penaltı kaçtı."
+        )
+        embed.color = discord.Color.red()
+
+    embed.set_footer(
+        text="Premier Support • Penaltı Sistemi"
+    )
+
+    await ctx.send(embed=embed)
+
+
+# =========================
 # HATA
 # =========================
 
 @bot.event
 async def on_command_error(ctx, error):
 
-    if isinstance(
-        error,
-        commands.MissingRequiredArgument
-    ):
+    if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send(
             "❌ Eksik bilgi girdin. Kullanımı kontrol et."
         )
         return
 
-    if isinstance(
-        error,
-        commands.MemberNotFound
-    ):
+    if isinstance(error, commands.MemberNotFound):
         await ctx.send(
             "❌ Kullanıcı bulunamadı. "
             "Kullanıcıyı etiketlediğinden emin ol."
