@@ -1689,7 +1689,7 @@ async def pen(ctx):
             "⚽ Gol — **25%**\n"
             "🧤 Kaleci Kurtarır — **25%**\n"
             "💥 Direk — **25%**\n"
-            "💨 Aut — **25%**"
+            "💨 Aut — **25%**\n"
         ),
         inline=False
     )
