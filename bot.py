@@ -1,10 +1,9 @@
 import os
+import discord
+from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv()
-
-import discord
-from discord.ext import commands
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -18,7 +17,7 @@ bot = commands.Bot(command_prefix=".", intents=intents)
 haftalik = {}
 all_time = {}
 
-# Haftalık sıfırlama komutunu kullanabilecek rol
+# Sıfırlama / aktarma yetkisi olan rol
 HAFTALIK_SIFIRLAMA_ROL_ID = 1553136364789309552
 
 NITELIKLER = [
@@ -192,7 +191,6 @@ async def s(ctx, uye: discord.Member = None):
     if uye is None:
         uye = ctx.author
 
-    # .s açıldığında direkt ALL TIME göster
     await ctx.send(
         embed=all_time_embed(uye),
         view=IstatistikView(uye)
@@ -200,7 +198,8 @@ async def s(ctx, uye: discord.Member = None):
 
 
 # =========================
-# .EKLE KOMUTU
+# .EKLE
+# SADECE HAFTALIK
 # =========================
 
 @bot.command()
@@ -212,7 +211,6 @@ async def ekle(
     nitelik: str
 ):
 
-    # Değer 1-49 arasında olmalı
     if deger < 1 or deger > 49:
 
         await ctx.send(
@@ -221,7 +219,6 @@ async def ekle(
 
         return
 
-    # Nitelik kontrolü
     bulunan = None
 
     for isim in NITELIKLER:
@@ -240,9 +237,7 @@ async def ekle(
 
         return
 
-    # SADECE HAFTALIK'A EKLE
     if uye.id not in haftalik:
-
         haftalik[uye.id] = {}
 
     haftalik[uye.id][bulunan] = deger
@@ -254,26 +249,28 @@ async def ekle(
 
 
 # =========================
-# HAFTALIK SIFIRLAMA
+# YETKİ KONTROLÜ
 # =========================
 
-async def haftalik_sifirla_islemi(ctx, uye):
+def yetkili_mi(ctx):
 
-    # Rolü bul
     rol = ctx.guild.get_role(
         HAFTALIK_SIFIRLAMA_ROL_ID
     )
 
     if rol is None:
+        return False
 
-        await ctx.send(
-            "❌ Haftalık sıfırlama rolü bulunamadı."
-        )
+    return rol in ctx.author.roles
 
-        return
 
-    # Kullanıcının bu role sahip olup olmadığını kontrol et
-    if rol not in ctx.author.roles:
+# =========================
+# HAFTALIK SIFIRLA
+# =========================
+
+async def haftalik_sifirla_islemi(ctx, uye=None):
+
+    if not yetkili_mi(ctx):
 
         await ctx.send(
             "❌ Bu komutu kullanmak için yetkin yok."
@@ -281,7 +278,26 @@ async def haftalik_sifirla_islemi(ctx, uye):
 
         return
 
-    # SADECE HAFTALIK VERİLERİ SİL
+    # @everyone
+    if ctx.message.mention_everyone:
+
+        for member in ctx.guild.members:
+            haftalik.pop(member.id, None)
+
+        await ctx.send(
+            "✅ Sunucudaki herkesin **Haftalık nitelikleri sıfırlandı.**"
+        )
+
+        return
+
+    if uye is None:
+
+        await ctx.send(
+            "❌ Bir kullanıcı etiketle."
+        )
+
+        return
+
     haftalik.pop(uye.id, None)
 
     await ctx.send(
@@ -290,24 +306,138 @@ async def haftalik_sifirla_islemi(ctx, uye):
     )
 
 
-# Noktasız i
 @bot.command(name="haftaliksifirla")
 async def haftaliksifirla(
     ctx,
-    uye: discord.Member
+    uye: discord.Member = None
 ):
 
     await haftalik_sifirla_islemi(ctx, uye)
 
 
-# Noktalı ı
 @bot.command(name="haftaliksıfırla")
 async def haftaliksifirla_2(
     ctx,
-    uye: discord.Member
+    uye: discord.Member = None
 ):
 
     await haftalik_sifirla_islemi(ctx, uye)
+
+
+# =========================
+# ALL TIME SIFIRLA
+# =========================
+
+async def all_time_sifirla_islemi(ctx, uye=None):
+
+    if not yetkili_mi(ctx):
+
+        await ctx.send(
+            "❌ Bu komutu kullanmak için yetkin yok."
+        )
+
+        return
+
+    # @everyone
+    if ctx.message.mention_everyone:
+
+        for member in ctx.guild.members:
+            all_time.pop(member.id, None)
+
+        await ctx.send(
+            "✅ Sunucudaki herkesin **All Time nitelikleri sıfırlandı.**"
+        )
+
+        return
+
+    if uye is None:
+
+        await ctx.send(
+            "❌ Bir kullanıcı etiketle."
+        )
+
+        return
+
+    all_time.pop(uye.id, None)
+
+    await ctx.send(
+        f"✅ {uye.mention} kullanıcısının "
+        f"**All Time nitelikleri sıfırlandı.**"
+    )
+
+
+@bot.command(name="alltimesifirla")
+async def alltimesifirla(
+    ctx,
+    uye: discord.Member = None
+):
+
+    await all_time_sifirla_islemi(ctx, uye)
+
+
+@bot.command(name="alltimesıfırla")
+async def alltimesifirla_2(
+    ctx,
+    uye: discord.Member = None
+):
+
+    await all_time_sifirla_islemi(ctx, uye)
+
+
+# =========================
+# AKTAR
+# HAFTALIK → ALL TIME
+# =========================
+
+@bot.command()
+async def aktar(
+    ctx,
+    uye: discord.Member = None
+):
+
+    if not yetkili_mi(ctx):
+
+        await ctx.send(
+            "❌ Bu komutu kullanmak için yetkin yok."
+        )
+
+        return
+
+    if uye is None:
+
+        await ctx.send(
+            "❌ Bir kullanıcı etiketle."
+        )
+
+        return
+
+    veriler = haftalik.get(uye.id, {})
+
+    if not veriler:
+
+        await ctx.send(
+            f"❌ {uye.mention} kullanıcısının "
+            f"aktarılacak haftalık niteliği yok."
+        )
+
+        return
+
+    if uye.id not in all_time:
+        all_time[uye.id] = {}
+
+    for isim, deger in veriler.items():
+
+        all_time[uye.id][isim] = (
+            all_time[uye.id].get(isim, 0) + deger
+        )
+
+    haftalik.pop(uye.id, None)
+
+    await ctx.send(
+        f"✅ {uye.mention} kullanıcısının "
+        f"**Haftalık nitelikleri All Time'a aktarıldı.**\n"
+        f"Haftalık verileri silindi."
+    )
 
 
 # =========================
