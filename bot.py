@@ -82,6 +82,7 @@ MUTE_ROL_ID = 1553136389984358552
 
 ANT_KANAL_ID = 1553136962473304156
 PEN_KANAL_ID = 1553136964042227722
+LOG_KANAL_ID = 1556078549176426546
 
 
 # =========================================================
@@ -192,6 +193,19 @@ def haftalik_sira_bul(user_id):
 
     return None
 
+async def stat_log_gonder(embed):
+    kanal = bot.get_channel(LOG_KANAL_ID)
+
+    if kanal is None:
+        try:
+            kanal = await bot.fetch_channel(LOG_KANAL_ID)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            return
+
+    try:
+        await kanal.send(embed=embed)
+    except discord.HTTPException:
+        pass
 
 # =========================================================
 # İSTATİSTİK EMBED
@@ -572,7 +586,6 @@ class SebepModal(
 ):
 
     def __init__(self, request_data):
-
         super().__init__()
 
         self.request_data = request_data
@@ -584,14 +597,9 @@ class SebepModal(
             max_length=500
         )
 
-        self.add_item(
-            self.sebep
-        )
+        self.add_item(self.sebep)
 
-    async def on_submit(
-        self,
-        interaction
-    ):
+    async def on_submit(self, interaction):
 
         self.request_data["sebep"] = self.sebep.value
 
@@ -609,51 +617,89 @@ class SebepModal(
 # EKLEME ONAY EMBED
 # =========================================================
 
-def ekle_onay_embed(data):
+class EkleSebepView(View):
 
-    oyuncu = data["oyuncu"]
+    def __init__(self, data):
+        super().__init__(timeout=300)
 
-    statlar = data["statlar"]
+        self.data = data
 
-    sebep = data.get(
-        "sebep",
-        "Belirtilmedi"
+    @discord.ui.button(
+        label="Sebep Gir",
+        emoji="📝",
+        style=discord.ButtonStyle.primary
     )
+    async def sebep_gir(
+        self,
+        interaction,
+        button
+    ):
 
-    metin = "\n".join(
-        f"**{isim}:** `+{deger}`"
-        for isim, deger in statlar.items()
+        if interaction.user.id != self.data["isteyen"]:
+
+            await interaction.response.send_message(
+                "❌ Bu butonu sadece komutu kullanan kişi kullanabilir.",
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_modal(
+            SebepModal(self.data)
+        )
+
+        # =========================
+        # ONAY MESAJI
+        # =========================
+
+        embed = discord.Embed(
+            title="✅ STATLAR ONAYLANDI",
+            description=(
+                f"{oyuncu.mention} oyuncusuna "
+                "haftalık statlar başarıyla eklendi."
+            ),
+            color=discord.Color.green()
+        )
+
+        embed.set_footer(
+            text="Premier Support • Stat Sistemi"
+        )
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=None
+        )
+
+    @discord.ui.button(
+        label="İptal Et",
+        emoji="❌",
+        style=discord.ButtonStyle.danger
     )
+    async def iptal(
+        self,
+        interaction,
+        button
+    ):
 
-    embed = discord.Embed(
-        title="📝 STAT EKLEME TALEBİ",
-        color=discord.Color.orange()
-    )
+        if interaction.user.id != self.data["isteyen"]:
 
-    embed.add_field(
-        name="👤 Oyuncu",
-        value=oyuncu.mention,
-        inline=False
-    )
+            await interaction.response.send_message(
+                "❌ Bu talebi sadece komutu kullanan kişi iptal edebilir.",
+                ephemeral=True
+            )
 
-    embed.add_field(
-        name="🎯 Eklenecek Statlar",
-        value=metin,
-        inline=False
-    )
+            return
 
-    embed.add_field(
-        name="📋 Sebep",
-        value=sebep,
-        inline=False
-    )
+        embed = discord.Embed(
+            title="❌ STAT TALEBİ İPTAL EDİLDİ",
+            description="Herhangi bir stat eklenmedi.",
+            color=discord.Color.red()
+        )
 
-    embed.set_footer(
-        text="Premier Support • Stat Onay Sistemi"
-    )
-
-    return embed
-
+        await interaction.response.edit_message(
+            embed=embed,
+            view=None
+        )
 
 # =========================================================
 # EKLEME ONAY BUTONLARI
@@ -906,11 +952,10 @@ async def ekle(
         "sebep": "Belirtilmedi"
     }
 
-    await ctx.send(
-        embed=ekle_onay_embed(data),
-        view=EkleOnayView(data)
-    )
-
+  await ctx.send(
+    embed=ekle_onay_embed(data),
+    view=EkleSebepView(data)
+)
 
 # =========================================================
 # .sil
@@ -975,24 +1020,90 @@ async def sil(
 
         return
 
+    # Gerçekten silinen statları tut
+    silinenler = {}
+
     for stat in bulunan:
 
         if stat in haftalik[uye.id]:
 
             haftalik[uye.id][stat] -= miktar
 
+            silinenler[stat] = miktar
+
             if haftalik[uye.id][stat] <= 0:
 
                 del haftalik[uye.id][stat]
+
+    if not silinenler:
+
+        await ctx.send(
+            "❌ Bu oyuncuda belirtilen statlardan hiçbiri bulunamadı."
+        )
+
+        return
 
     if not haftalik[uye.id]:
 
         del haftalik[uye.id]
 
+    # =========================
+    # LOG
+    # =========================
+
+    stat_metni = "\n".join(
+        f"**{isim}:** `-{deger}`"
+        for isim, deger in silinenler.items()
+    )
+
+    simdi = discord.utils.utcnow()
+    timestamp = int(simdi.timestamp())
+
+    log_embed = discord.Embed(
+        title="📉 STAT SİLİNDİ",
+        color=discord.Color.red()
+    )
+
+    log_embed.add_field(
+        name="👤 İşlemi Yapan",
+        value=ctx.author.mention,
+        inline=True
+    )
+
+    log_embed.add_field(
+        name="🎯 Oyuncu",
+        value=uye.mention,
+        inline=True
+    )
+
+    log_embed.add_field(
+        name="📊 Silinen Nitelikler",
+        value=stat_metni,
+        inline=False
+    )
+
+    log_embed.add_field(
+        name="🕒 Zaman",
+        value=(
+            f"<t:{timestamp}:F>\n"
+            f"<t:{timestamp}:R>"
+        ),
+        inline=False
+    )
+
+    log_embed.set_thumbnail(
+        url=uye.display_avatar.url
+    )
+
+    log_embed.set_footer(
+        text="Premier Support • Stat Log"
+    )
+
+    await stat_log_gonder(log_embed)
+
     await ctx.send(
         f"✅ {uye.mention} oyuncusundan haftalık stat düşürüldü."
     )
-
 
 # =========================================================
 # .haftaliksifirla
