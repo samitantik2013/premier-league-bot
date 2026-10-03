@@ -1,3 +1,8 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import discord
 from discord.ext import commands
 
@@ -309,4 +314,4 @@ async def haftaliksifirla_2(
 # BOTU BAŞLAT
 # =========================
 
-bot.run("MTU1NTk3MjEzNjM2MTc4NzQ5NA.GH_Gw6.YD_UuMPMoXsYQsoY7kp4OBjFpDbFj6JZ8lUYB4")
+bot.run(os.getenv("DISCORD_TOKEN"))
