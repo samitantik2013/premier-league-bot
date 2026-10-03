@@ -1463,44 +1463,22 @@ async def unmute(
 # =========================================================
 
 @bot.command()
-async def gonder(
-    ctx,
-    *,
-    mesaj: str = None
-):
-
-    if ctx.guild is None:
-        return
-
-    rol = ctx.guild.get_role(
-        YONETIM_ROL_ID
-    )
-
-    if rol is None or rol not in ctx.author.roles:
-
-        await ctx.send(
-            "❌ Bu komutu kullanmak için yetkin yok."
-        )
-
-        return
-
-    if mesaj is None or not mesaj.strip():
-
-        await ctx.send(
-            "❌ Göndermek istediğin mesajı yaz."
-        )
-
-        return
-
+@rol_gerekli(1553136364789309552)
+async def gonder(ctx, *, mesaj):
     embed = discord.Embed(
-        description=mesaj,
-        color=discord.Color.blurple()
+        description=mesaj
     )
 
-    await ctx.send(
-        embed=embed
+    embed.set_author(
+        name=ctx.author.display_name,
+        icon_url=ctx.author.display_avatar.url
     )
 
+    embed.set_footer(
+        text="Premier Support"
+    )
+
+    await ctx.send(embed=embed)
 
 # =========================================================
 # .ant
