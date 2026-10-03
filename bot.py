@@ -355,7 +355,6 @@ def haftalik_liderlik_embed(page=0):
         page = toplam_sayfa - 1
 
     baslangic = page * sayfa_basina
-
     bitis = baslangic + sayfa_basina
 
     sayfadakiler = siralama[
@@ -388,19 +387,15 @@ def haftalik_liderlik_embed(page=0):
             isim = f"<@{user_id}>"
 
         if index == 1:
-
             sira_emoji = "🥇"
 
         elif index == 2:
-
             sira_emoji = "🥈"
 
         elif index == 3:
-
             sira_emoji = "🥉"
 
         else:
-
             sira_emoji = f"`#{index}`"
 
         satirlar.append(
@@ -839,7 +834,6 @@ async def ekle(
 
     kalan = statlar
 
-    # Uzun stat isimleri önce kontrol edilir
     for stat in sorted(
         STATLAR,
         key=len,
@@ -1297,7 +1291,6 @@ async def unban(
     )
 
     if match:
-
         kullanici_id = match.group(1)
 
     try:
@@ -1463,8 +1456,19 @@ async def unmute(
 # =========================================================
 
 @bot.command()
-@rol_gerekli(1553136364789309552)
 async def gonder(ctx, *, mesaj):
+
+    if not rol_var_mi(
+        ctx,
+        YONETIM_ROL_ID
+    ):
+
+        await ctx.send(
+            "❌ Bu komutu kullanmak için yetkin yok."
+        )
+
+        return
+
     embed = discord.Embed(
         description=mesaj
     )
@@ -1478,7 +1482,10 @@ async def gonder(ctx, *, mesaj):
         text="Premier Support"
     )
 
-    await ctx.send(embed=embed)
+    await ctx.send(
+        embed=embed
+    )
+
 
 # =========================================================
 # .ant
@@ -1514,7 +1521,6 @@ async def ant(ctx):
             )
 
             dakika = kalan // 60
-
             saniye = kalan % 60
 
             embed = discord.Embed(
@@ -1622,7 +1628,6 @@ async def pen(ctx):
             )
 
             dakika = kalan // 60
-
             saniye = kalan % 60
 
             embed = discord.Embed(
