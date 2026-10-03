@@ -1,4 +1,6 @@
+```python
 import os
+import re
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -17,7 +19,6 @@ bot = commands.Bot(command_prefix=".", intents=intents)
 haftalik = {}
 all_time = {}
 
-# Sıfırlama / aktarma yetkisi olan rol
 HAFTALIK_SIFIRLAMA_ROL_ID = 1553136364789309552
 
 NITELIKLER = [
@@ -129,7 +130,7 @@ def haftalik_embed(uye):
 
 
 # =========================
-# BUTONLAR
+# İSTATİSTİK BUTONLARI
 # =========================
 
 class IstatistikView(discord.ui.View):
@@ -182,7 +183,7 @@ async def on_ready():
 
 
 # =========================
-# .S KOMUTU
+# .S
 # =========================
 
 @bot.command()
@@ -197,54 +198,361 @@ async def s(ctx, uye: discord.Member = None):
     )
 
 
+# =========================================================
+# STAT EKLEME SİSTEMİ
+# =========================================================
+
+def statlari_parse_et(veriler):
+
+    pattern = r"(\d+)\s+(.+?)(?=\s*,?\s*\d+\s+|$)"
+
+    eslesmeler = re.findall(pattern, veriler)
+
+    bulunanlar = []
+    hatalar = []
+
+    for deger_str, nitelik in eslesmeler:
+
+        deger = int(deger_str)
+        nitelik = nitelik.strip(" ,")
+
+        if deger < 1 or deger > 49:
+
+            hatalar.append(
+                f"**{nitelik}** → değer 1-49 arasında olmalı."
+            )
+
+            continue
+
+        bulunan = None
+
+        for isim in NITELIKLER:
+
+            if isim.lower() == nitelik.lower():
+                bulunan = isim
+                break
+
+        if bulunan is None:
+
+            hatalar.append(
+                f"Geçersiz nitelik: **{nitelik}**"
+            )
+
+            continue
+
+        bulunanlar.append(
+            (bulunan, deger)
+        )
+
+    return bulunanlar, hatalar
+
+
+# =========================
+# SEBEP MODALI
+# =========================
+
+class SebepModal(discord.ui.Modal, title="Stat Ekleme Sebebi"):
+
+    sebep = discord.ui.TextInput(
+        label="Sebep",
+        placeholder="Statların neden eklendiğini yaz...",
+        required=True,
+        min_length=2,
+        max_length=500,
+        style=discord.TextStyle.paragraph
+    )
+
+    def __init__(self, talep):
+        super().__init__()
+        self.talep = talep
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if interaction.user.id != self.talep["isteyen_id"]:
+
+            await interaction.response.send_message(
+                "❌ Bu stat talebini sadece talebi oluşturan kişi düzenleyebilir.",
+                ephemeral=True
+            )
+
+            return
+
+        self.talep["sebep"] = str(self.sebep)
+
+        await interaction.response.edit_message(
+            embed=stat_talep_embed(self.talep),
+            view=OnayView(self.talep)
+        )
+
+
+# =========================
+# STAT TALEP EMBED
+# =========================
+
+def stat_talep_embed(talep):
+
+    uye = talep["uye"]
+    statlar = talep["statlar"]
+    sebep = talep.get("sebep")
+
+    stat_listesi = "\n".join(
+        f"**{isim}:** {deger}"
+        for isim, deger in statlar
+    )
+
+    embed = discord.Embed(
+        title="📋 Stat Ekleme Talebi",
+        color=discord.Color.orange()
+    )
+
+    embed.add_field(
+        name="👤 Oyuncu",
+        value=uye.mention,
+        inline=False
+    )
+
+    embed.add_field(
+        name="🎯 Eklenecek Nitelikler",
+        value=stat_listesi,
+        inline=False
+    )
+
+    if sebep:
+        embed.add_field(
+            name="📝 Sebep",
+            value=sebep,
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="📝 Sebep",
+            value="*Henüz sebep girilmedi.*",
+            inline=False
+        )
+
+    embed.set_footer(
+        text="Statlar onay verilene kadar eklenmez."
+    )
+
+    return embed
+
+
+# =========================
+# SEBEP GİR BUTONU
+# =========================
+
+class SebepView(discord.ui.View):
+
+    def __init__(self, talep):
+        super().__init__(timeout=300)
+        self.talep = talep
+
+    @discord.ui.button(
+        label="Sebep Gir",
+        emoji="📝",
+        style=discord.ButtonStyle.primary
+    )
+    async def sebep_gir(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if interaction.user.id != self.talep["isteyen_id"]:
+
+            await interaction.response.send_message(
+                "❌ Bu talebi sadece talebi oluşturan kişi düzenleyebilir.",
+                ephemeral=True
+            )
+
+            return
+
+        await interaction.response.send_modal(
+            SebepModal(self.talep)
+        )
+
+
+# =========================
+# ONAY / İPTAL BUTONLARI
+# =========================
+
+class OnayView(discord.ui.View):
+
+    def __init__(self, talep):
+        super().__init__(timeout=300)
+        self.talep = talep
+
+    @discord.ui.button(
+        label="Onayla",
+        emoji="✅",
+        style=discord.ButtonStyle.success
+    )
+    async def onayla(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if interaction.user.id != self.talep["isteyen_id"]:
+
+            await interaction.response.send_message(
+                "❌ Bu talebi sadece talebi oluşturan kişi onaylayabilir.",
+                ephemeral=True
+            )
+
+            return
+
+        # Sebep yoksa onaylama
+        if not self.talep.get("sebep"):
+
+            await interaction.response.send_message(
+                "❌ Önce **Sebep Gir** butonundan sebep yazmalısın.",
+                ephemeral=True
+            )
+
+            return
+
+        uye = self.talep["uye"]
+
+        if uye.id not in haftalik:
+            haftalik[uye.id] = {}
+
+        for isim, deger in self.talep["statlar"]:
+
+            haftalik[uye.id][isim] = deger
+
+        stat_listesi = "\n".join(
+            f"**{isim}: {deger}**"
+            for isim, deger in self.talep["statlar"]
+        )
+
+        embed = discord.Embed(
+            title="✅ Statlar Eklendi",
+            color=discord.Color.green()
+        )
+
+        embed.add_field(
+            name="👤 Oyuncu",
+            value=uye.mention,
+            inline=False
+        )
+
+        embed.add_field(
+            name="🎯 Eklenen Nitelikler",
+            value=stat_listesi,
+            inline=False
+        )
+
+        embed.add_field(
+            name="📝 Sebep",
+            value=self.talep["sebep"],
+            inline=False
+        )
+
+        embed.set_footer(
+            text="Premier Support • Haftalık"
+        )
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=None
+        )
+
+    @discord.ui.button(
+        label="İptal Et",
+        emoji="❌",
+        style=discord.ButtonStyle.danger
+    )
+    async def iptal(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if interaction.user.id != self.talep["isteyen_id"]:
+
+            await interaction.response.send_message(
+                "❌ Bu talebi sadece talebi oluşturan kişi iptal edebilir.",
+                ephemeral=True
+            )
+
+            return
+
+        embed = discord.Embed(
+            title="❌ Stat Ekleme İptal Edildi",
+            description=(
+                f"{self.talep['uye'].mention} için oluşturulan "
+                "stat ekleme talebi iptal edildi."
+            ),
+            color=discord.Color.red()
+        )
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=None
+        )
+
+
 # =========================
 # .EKLE
-# SADECE HAFTALIK
 # =========================
 
 @bot.command()
 async def ekle(
     ctx,
     uye: discord.Member,
-    deger: int,
     *,
-    nitelik: str
+    veriler: str
 ):
 
-    if deger < 1 or deger > 49:
+    statlar, hatalar = statlari_parse_et(veriler)
+
+    if not statlar:
+
+        mesaj = "❌ Geçerli bir nitelik bulunamadı."
+
+        if hatalar:
+            mesaj += "\n" + "\n".join(hatalar)
+
+        mesaj += (
+            "\n\nÖrnek:\n"
+            "`.ekle @Mauro 49 Bitiricilik, 49 Dribbling`"
+        )
+
+        await ctx.send(mesaj)
+
+        return
+
+    # Hatalı stat varsa onları da göster
+    if hatalar:
+
+        hata_mesaji = "\n".join(
+            f"❌ {hata}"
+            for hata in hatalar
+        )
 
         await ctx.send(
-            "❌ Değer **1 ile 49 arasında** olmalı."
+            f"{hata_mesaji}\n\n"
+            "❌ Hatalı nitelikler nedeniyle talep oluşturulmadı."
         )
 
         return
 
-    bulunan = None
+    # Talep oluştur
+    talep = {
+        "uye": uye,
+        "statlar": statlar,
+        "isteyen_id": ctx.author.id,
+        "sebep": None
+    }
 
-    for isim in NITELIKLER:
-
-        if isim.lower() == nitelik.lower():
-
-            bulunan = isim
-            break
-
-    if bulunan is None:
-
-        await ctx.send(
-            "❌ Geçersiz nitelik.\n"
-            "Örnek: `.ekle @Mauro 35 Dribbling`"
-        )
-
-        return
-
-    if uye.id not in haftalik:
-        haftalik[uye.id] = {}
-
-    haftalik[uye.id][bulunan] = deger
-
+    # Hemen ekleme YOK
     await ctx.send(
-        f"✅ {uye.mention} → **{bulunan}: {deger}** "
-        f"haftalığa eklendi."
+        embed=stat_talep_embed(talep),
+        view=SebepView(talep)
     )
 
 
@@ -267,9 +575,9 @@ def yetkili_mi(ctx):
     return rol in ctx.author.roles
 
 
-# =========================
+# =========================================================
 # HAFTALIK SIFIRLA
-# =========================
+# =========================================================
 
 async def haftalik_sifirla_islemi(ctx, uye=None):
 
@@ -288,12 +596,12 @@ async def haftalik_sifirla_islemi(ctx, uye=None):
             haftalik.pop(member.id, None)
 
         await ctx.send(
-            "✅ Sunucudaki herkesin **Haftalık nitelikleri sıfırlandı.**"
+            "✅ Sunucudaki herkesin "
+            "**Haftalık nitelikleri sıfırlandı.**"
         )
 
         return
 
-    # Kullanıcı yoksa hata verme
     if uye is None:
 
         await ctx.send(
@@ -328,9 +636,9 @@ async def haftaliksifirla_2(
     await haftalik_sifirla_islemi(ctx, uye)
 
 
-# =========================
+# =========================================================
 # ALL TIME SIFIRLA
-# =========================
+# =========================================================
 
 async def all_time_sifirla_islemi(ctx, uye=None):
 
@@ -349,12 +657,12 @@ async def all_time_sifirla_islemi(ctx, uye=None):
             all_time.pop(member.id, None)
 
         await ctx.send(
-            "✅ Sunucudaki herkesin **All Time nitelikleri sıfırlandı.**"
+            "✅ Sunucudaki herkesin "
+            "**All Time nitelikleri sıfırlandı.**"
         )
 
         return
 
-    # Kullanıcı yoksa hata verme
     if uye is None:
 
         await ctx.send(
@@ -389,10 +697,10 @@ async def alltimesifirla_2(
     await all_time_sifirla_islemi(ctx, uye)
 
 
-# =========================
+# =========================================================
 # AKTAR
 # HAFTALIK → ALL TIME
-# =========================
+# =========================================================
 
 @bot.command()
 async def aktar(
@@ -436,7 +744,6 @@ async def aktar(
             all_time[uye.id].get(isim, 0) + deger
         )
 
-    # Aktardıktan sonra haftalığı sil
     haftalik.pop(uye.id, None)
 
     await ctx.send(
@@ -446,9 +753,9 @@ async def aktar(
     )
 
 
-# =========================
-# HATALI KOMUTLAR
-# =========================
+# =========================================================
+# HATA YAKALAMA
+# =========================================================
 
 @bot.event
 async def on_command_error(ctx, error):
