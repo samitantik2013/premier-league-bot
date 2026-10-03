@@ -16,6 +16,9 @@ haftalik = {}
 all_time = {}
 antrenman = {}
 
+ant_son_kullanim = {}
+pen_son_kullanim = {}
+
 YONETIM_ROL_ID = 1553136364789309552
 EKLE_SIL_ROL_ID = 1553136385538654329
 
@@ -86,7 +89,9 @@ def all_time_embed(uye):
         f"**{toplam}**"
     )
 
-    embed.set_footer(text="Premier Support • İstatistikler")
+    embed.set_footer(
+        text="Premier Support • İstatistikler"
+    )
 
     return embed
 
@@ -138,6 +143,7 @@ class IstatistikView(discord.ui.View):
         style=discord.ButtonStyle.primary
     )
     async def haftalik_button(self, interaction, button):
+
         await interaction.response.edit_message(
             embed=haftalik_embed(self.uye),
             view=self
@@ -149,6 +155,7 @@ class IstatistikView(discord.ui.View):
         style=discord.ButtonStyle.secondary
     )
     async def all_time_button(self, interaction, button):
+
         await interaction.response.edit_message(
             embed=all_time_embed(self.uye),
             view=self
@@ -161,6 +168,7 @@ class IstatistikView(discord.ui.View):
 
 @bot.event
 async def on_ready():
+
     print(f"{bot.user} aktif!")
 
 
@@ -229,25 +237,33 @@ def statlari_parse_et(veriler):
         nitelik = nitelik.strip(" ,")
 
         if deger < 1 or deger > 49:
+
             hatalar.append(
                 f"**{nitelik}** → değer 1-49 arasında olmalı."
             )
+
             continue
 
         bulunan = None
 
         for isim in NITELIKLER:
+
             if isim.lower() == nitelik.lower():
+
                 bulunan = isim
                 break
 
         if bulunan is None:
+
             hatalar.append(
                 f"Geçersiz nitelik: **{nitelik}**"
             )
+
             continue
 
-        bulunanlar.append((bulunan, deger))
+        bulunanlar.append(
+            (bulunan, deger)
+        )
 
     return bulunanlar, hatalar
 
@@ -285,12 +301,15 @@ def stat_talep_embed(talep):
     )
 
     if sebep:
+
         embed.add_field(
             name="📝 Sebep",
             value=sebep,
             inline=False
         )
+
     else:
+
         embed.add_field(
             name="📝 Sebep",
             value="*Henüz sebep girilmedi.*",
@@ -308,7 +327,10 @@ def stat_talep_embed(talep):
 # SEBEP MODAL
 # =========================
 
-class SebepModal(discord.ui.Modal, title="Stat Ekleme Sebebi"):
+class SebepModal(
+    discord.ui.Modal,
+    title="Stat Ekleme Sebebi"
+):
 
     sebep = discord.ui.TextInput(
         label="Sebep",
@@ -320,16 +342,20 @@ class SebepModal(discord.ui.Modal, title="Stat Ekleme Sebebi"):
     )
 
     def __init__(self, talep):
+
         super().__init__()
+
         self.talep = talep
 
     async def on_submit(self, interaction):
 
         if interaction.user.id != self.talep["isteyen_id"]:
+
             await interaction.response.send_message(
                 "❌ Bu stat talebini sadece talebi oluşturan kişi düzenleyebilir.",
                 ephemeral=True
             )
+
             return
 
         self.talep["sebep"] = str(self.sebep)
@@ -347,7 +373,9 @@ class SebepModal(discord.ui.Modal, title="Stat Ekleme Sebebi"):
 class SebepView(discord.ui.View):
 
     def __init__(self, talep):
+
         super().__init__(timeout=300)
+
         self.talep = talep
 
     @discord.ui.button(
@@ -358,10 +386,12 @@ class SebepView(discord.ui.View):
     async def sebep_gir(self, interaction, button):
 
         if interaction.user.id != self.talep["isteyen_id"]:
+
             await interaction.response.send_message(
                 "❌ Bu talebi sadece talebi oluşturan kişi düzenleyebilir.",
                 ephemeral=True
             )
+
             return
 
         await interaction.response.send_modal(
@@ -376,7 +406,9 @@ class SebepView(discord.ui.View):
 class OnayView(discord.ui.View):
 
     def __init__(self, talep):
+
         super().__init__(timeout=300)
+
         self.talep = talep
 
     @discord.ui.button(
@@ -387,17 +419,21 @@ class OnayView(discord.ui.View):
     async def onayla(self, interaction, button):
 
         if interaction.user.id != self.talep["isteyen_id"]:
+
             await interaction.response.send_message(
                 "❌ Bu talebi sadece talebi oluşturan kişi onaylayabilir.",
                 ephemeral=True
             )
+
             return
 
         if not self.talep.get("sebep"):
+
             await interaction.response.send_message(
                 "❌ Önce **Sebep Gir** butonundan sebep yazmalısın.",
                 ephemeral=True
             )
+
             return
 
         uye = self.talep["uye"]
@@ -406,6 +442,7 @@ class OnayView(discord.ui.View):
             haftalik[uye.id] = {}
 
         for isim, deger in self.talep["statlar"]:
+
             haftalik[uye.id][isim] = deger
 
         stat_listesi = "\n".join(
@@ -453,10 +490,12 @@ class OnayView(discord.ui.View):
     async def iptal(self, interaction, button):
 
         if interaction.user.id != self.talep["isteyen_id"]:
+
             await interaction.response.send_message(
                 "❌ Bu talebi sadece talebi oluşturan kişi iptal edebilir.",
                 ephemeral=True
             )
+
             return
 
         embed = discord.Embed(
@@ -482,9 +521,11 @@ class OnayView(discord.ui.View):
 async def ekle(ctx, uye: discord.Member, *, veriler: str):
 
     if not ekle_sil_yetkili_mi(ctx):
+
         await ctx.send(
             "❌ Bu komutu kullanmak için yetkin yok."
         )
+
         return
 
     statlar, hatalar = statlari_parse_et(veriler)
@@ -502,6 +543,7 @@ async def ekle(ctx, uye: discord.Member, *, veriler: str):
         )
 
         await ctx.send(mesaj)
+
         return
 
     if hatalar:
@@ -537,32 +579,40 @@ async def ekle(ctx, uye: discord.Member, *, veriler: str):
 async def sil(ctx, uye: discord.Member, *, veriler: str):
 
     if not ekle_sil_yetkili_mi(ctx):
+
         await ctx.send(
             "❌ Bu komutu kullanmak için yetkin yok."
         )
+
         return
 
     statlar, hatalar = statlari_parse_et(veriler)
 
     if not statlar:
+
         await ctx.send(
             "❌ Geçerli bir nitelik bulunamadı."
         )
+
         return
 
     if hatalar:
+
         await ctx.send(
             "\n".join(
                 f"❌ {hata}"
                 for hata in hatalar
             )
         )
+
         return
 
     if uye.id not in haftalik:
+
         await ctx.send(
             f"❌ {uye.mention} kullanıcısının haftalık niteliği yok."
         )
+
         return
 
     veriler_dict = haftalik[uye.id]
@@ -571,19 +621,24 @@ async def sil(ctx, uye: discord.Member, *, veriler: str):
     for isim, deger in statlar:
 
         if isim not in veriler_dict:
+
             await ctx.send(
                 f"❌ {uye.mention} kullanıcısında "
                 f"**{isim}** bulunmuyor."
             )
+
             return
 
         mevcut = veriler_dict[isim]
         yeni_deger = mevcut - deger
 
         if yeni_deger <= 0:
+
             del veriler_dict[isim]
             yeni_deger = 0
+
         else:
+
             veriler_dict[isim] = yeni_deger
 
         degisenler.append(
@@ -619,7 +674,9 @@ def kullaniciyi_bul(ctx, metin):
     )
 
     if match:
+
         user_id = int(match.group(1))
+
         uye = ctx.guild.get_member(user_id)
 
         if uye:
@@ -628,7 +685,10 @@ def kullaniciyi_bul(ctx, metin):
         return None
 
     if metin.isdigit():
-        uye = ctx.guild.get_member(int(metin))
+
+        uye = ctx.guild.get_member(
+            int(metin)
+        )
 
         if uye:
             return uye
@@ -643,28 +703,40 @@ def kullaniciyi_bul(ctx, metin):
 async def haftalik_sifirla_islemi(ctx, metin):
 
     if not yonetim_yetkili_mi(ctx):
+
         await ctx.send(
             "❌ Bu komutu kullanmak için yetkin yok."
         )
+
         return
 
     if not metin:
+
         await ctx.send(
             "❌ Bir kullanıcı etiketle veya `@everyone` yaz."
         )
+
         return
 
-    hedef = kullaniciyi_bul(ctx, metin)
+    hedef = kullaniciyi_bul(
+        ctx,
+        metin
+    )
 
     if hedef == "everyone":
 
         for member in ctx.guild.members:
-            haftalik.pop(member.id, None)
+
+            haftalik.pop(
+                member.id,
+                None
+            )
 
         await ctx.send(
             "✅ Sunucudaki herkesin "
             "**Haftalık nitelikleri sıfırlandı.**"
         )
+
         return
 
     if hedef is None:
@@ -673,9 +745,13 @@ async def haftalik_sifirla_islemi(ctx, metin):
             "❌ Kullanıcı bulunamadı. "
             "Kullanıcıyı etiketlediğinden emin ol."
         )
+
         return
 
-    haftalik.pop(hedef.id, None)
+    haftalik.pop(
+        hedef.id,
+        None
+    )
 
     await ctx.send(
         f"✅ {hedef.mention} kullanıcısının "
@@ -685,12 +761,20 @@ async def haftalik_sifirla_islemi(ctx, metin):
 
 @bot.command(name="haftaliksifirla")
 async def haftaliksifirla(ctx, *, metin=None):
-    await haftalik_sifirla_islemi(ctx, metin)
+
+    await haftalik_sifirla_islemi(
+        ctx,
+        metin
+    )
 
 
 @bot.command(name="haftaliksıfırla")
 async def haftaliksifirla_2(ctx, *, metin=None):
-    await haftalik_sifirla_islemi(ctx, metin)
+
+    await haftalik_sifirla_islemi(
+        ctx,
+        metin
+    )
 
 
 # =========================
@@ -700,28 +784,40 @@ async def haftaliksifirla_2(ctx, *, metin=None):
 async def all_time_sifirla_islemi(ctx, metin):
 
     if not yonetim_yetkili_mi(ctx):
+
         await ctx.send(
             "❌ Bu komutu kullanmak için yetkin yok."
         )
+
         return
 
     if not metin:
+
         await ctx.send(
             "❌ Bir kullanıcı etiketle veya `@everyone` yaz."
         )
+
         return
 
-    hedef = kullaniciyi_bul(ctx, metin)
+    hedef = kullaniciyi_bul(
+        ctx,
+        metin
+    )
 
     if hedef == "everyone":
 
         for member in ctx.guild.members:
-            all_time.pop(member.id, None)
+
+            all_time.pop(
+                member.id,
+                None
+            )
 
         await ctx.send(
             "✅ Sunucudaki herkesin "
             "**All Time nitelikleri sıfırlandı.**"
         )
+
         return
 
     if hedef is None:
@@ -730,9 +826,13 @@ async def all_time_sifirla_islemi(ctx, metin):
             "❌ Kullanıcı bulunamadı. "
             "Kullanıcıyı etiketlediğinden emin ol."
         )
+
         return
 
-    all_time.pop(hedef.id, None)
+    all_time.pop(
+        hedef.id,
+        None
+    )
 
     await ctx.send(
         f"✅ {hedef.mention} kullanıcısının "
@@ -742,12 +842,20 @@ async def all_time_sifirla_islemi(ctx, metin):
 
 @bot.command(name="alltimesifirla")
 async def alltimesifirla(ctx, *, metin=None):
-    await all_time_sifirla_islemi(ctx, metin)
+
+    await all_time_sifirla_islemi(
+        ctx,
+        metin
+    )
 
 
 @bot.command(name="alltimesıfırla")
 async def alltimesifirla_2(ctx, *, metin=None):
-    await all_time_sifirla_islemi(ctx, metin)
+
+    await all_time_sifirla_islemi(
+        ctx,
+        metin
+    )
 
 
 # =========================
@@ -758,32 +866,40 @@ async def alltimesifirla_2(ctx, *, metin=None):
 async def alltimesil(ctx, uye: discord.Member, *, veriler: str):
 
     if not yonetim_yetkili_mi(ctx):
+
         await ctx.send(
             "❌ Bu komutu kullanmak için yetkin yok."
         )
+
         return
 
     statlar, hatalar = statlari_parse_et(veriler)
 
     if not statlar:
+
         await ctx.send(
             "❌ Geçerli bir nitelik bulunamadı."
         )
+
         return
 
     if hatalar:
+
         await ctx.send(
             "\n".join(
                 f"❌ {hata}"
                 for hata in hatalar
             )
         )
+
         return
 
     if uye.id not in all_time:
+
         await ctx.send(
             f"❌ {uye.mention} kullanıcısının All Time niteliği yok."
         )
+
         return
 
     veriler_dict = all_time[uye.id]
@@ -792,19 +908,24 @@ async def alltimesil(ctx, uye: discord.Member, *, veriler: str):
     for isim, deger in statlar:
 
         if isim not in veriler_dict:
+
             await ctx.send(
                 f"❌ {uye.mention} kullanıcısında "
                 f"All Time **{isim}** bulunmuyor."
             )
+
             return
 
         mevcut = veriler_dict[isim]
         yeni_deger = mevcut - deger
 
         if yeni_deger <= 0:
+
             del veriler_dict[isim]
             yeni_deger = 0
+
         else:
+
             veriler_dict[isim] = yeni_deger
 
         degisenler.append(
@@ -812,7 +933,10 @@ async def alltimesil(ctx, uye: discord.Member, *, veriler: str):
         )
 
     if not veriler_dict:
-        all_time.pop(uye.id, None)
+        all_time.pop(
+            uye.id,
+            None
+        )
 
     await ctx.send(
         f"✅ {uye.mention} All Time statlarından düşüldü:\n"
@@ -828,35 +952,49 @@ async def alltimesil(ctx, uye: discord.Member, *, veriler: str):
 async def aktar(ctx, uye: discord.Member = None):
 
     if not yonetim_yetkili_mi(ctx):
+
         await ctx.send(
             "❌ Bu komutu kullanmak için yetkin yok."
         )
+
         return
 
     if uye is None:
+
         await ctx.send(
             "❌ Bir kullanıcı etiketle."
         )
+
         return
 
-    veriler = haftalik.get(uye.id, {})
+    veriler = haftalik.get(
+        uye.id,
+        {}
+    )
 
     if not veriler:
+
         await ctx.send(
             f"❌ {uye.mention} kullanıcısının "
             "aktarılacak haftalık niteliği yok."
         )
+
         return
 
     if uye.id not in all_time:
         all_time[uye.id] = {}
 
     for isim, deger in veriler.items():
+
         all_time[uye.id][isim] = (
-            all_time[uye.id].get(isim, 0) + deger
+            all_time[uye.id].get(isim, 0)
+            + deger
         )
 
-    haftalik.pop(uye.id, None)
+    haftalik.pop(
+        uye.id,
+        None
+    )
 
     await ctx.send(
         f"✅ {uye.mention} kullanıcısının "
@@ -873,14 +1011,62 @@ async def aktar(ctx, uye: discord.Member = None):
 async def ant(ctx):
 
     if ctx.channel.id != ANT_KANAL_ID:
+
         await ctx.send(
             f"❌ Bu komut sadece <#{ANT_KANAL_ID}> kanalında kullanılabilir."
         )
+
         return
 
+    simdi = discord.utils.utcnow()
     user_id = ctx.author.id
 
-    mevcut = antrenman.get(user_id, 0) + 1
+    # 1 SAAT COOLDOWN
+
+    if user_id in ant_son_kullanim:
+
+        fark = simdi - ant_son_kullanim[user_id]
+
+        if fark.total_seconds() < 3600:
+
+            kalan = (
+                3600
+                - int(fark.total_seconds())
+            )
+
+            dakika = kalan // 60
+            saniye = kalan % 60
+
+            embed = discord.Embed(
+                title="⏳ Antrenman Bekleme Süresi",
+                description=(
+                    f"{ctx.author.mention}, antrenmanını zaten yaptın!\n\n"
+                    f"⏱️ Tekrar kullanabilmek için:\n"
+                    f"**{dakika} dakika {saniye} saniye** beklemelisin."
+                ),
+                color=discord.Color.orange()
+            )
+
+            embed.set_footer(
+                text="Premier Support • Antrenman Sistemi"
+            )
+
+            await ctx.send(
+                embed=embed
+            )
+
+            return
+
+    ant_son_kullanim[user_id] = simdi
+
+    mevcut = (
+        antrenman.get(
+            user_id,
+            0
+        )
+        + 1
+    )
+
     antrenman[user_id] = mevcut
 
     dolu = "🟩" * mevcut
@@ -906,7 +1092,7 @@ async def ant(ctx):
             value=(
                 "🔥 **10/10 tamamlandı!**\n"
                 "Oyuncu antrenmanı başarıyla bitirdi.\n\n"
-                "🔄 Sayaç otomatik olarak sıfırlandı."
+                "🔄 Antrenman seviyesi sıfırlandı."
             ),
             inline=False
         )
@@ -918,8 +1104,8 @@ async def ant(ctx):
         embed.add_field(
             name="💪 Devam Et!",
             value=(
-                f"Bir sonraki antrenman: **{mevcut + 1}/10**\n"
-                "10/10'a ulaşınca sayaç sıfırlanır."
+                f"Bir sonraki seviye: **{mevcut + 1}/10**\n"
+                "⏱️ Bir sonraki antrenman için 1 saat beklemelisin."
             ),
             inline=False
         )
@@ -928,7 +1114,9 @@ async def ant(ctx):
         text="Premier Support • Antrenman Sistemi"
     )
 
-    await ctx.send(embed=embed)
+    await ctx.send(
+        embed=embed
+    )
 
 
 # =========================
@@ -939,10 +1127,53 @@ async def ant(ctx):
 async def pen(ctx):
 
     if ctx.channel.id != PEN_KANAL_ID:
+
         await ctx.send(
             f"❌ Bu komut sadece <#{PEN_KANAL_ID}> kanalında kullanılabilir."
         )
+
         return
+
+    simdi = discord.utils.utcnow()
+    user_id = ctx.author.id
+
+    # 1 SAAT COOLDOWN
+
+    if user_id in pen_son_kullanim:
+
+        fark = simdi - pen_son_kullanim[user_id]
+
+        if fark.total_seconds() < 3600:
+
+            kalan = (
+                3600
+                - int(fark.total_seconds())
+            )
+
+            dakika = kalan // 60
+            saniye = kalan % 60
+
+            embed = discord.Embed(
+                title="⏳ Penaltı Bekleme Süresi",
+                description=(
+                    f"{ctx.author.mention}, penaltını zaten kullandın!\n\n"
+                    f"⚽ Yeni penaltı kullanabilmek için:\n"
+                    f"**{dakika} dakika {saniye} saniye** beklemelisin."
+                ),
+                color=discord.Color.orange()
+            )
+
+            embed.set_footer(
+                text="Premier Support • Penaltı Sistemi"
+            )
+
+            await ctx.send(
+                embed=embed
+            )
+
+            return
+
+    pen_son_kullanim[user_id] = simdi
 
     sonuc = random.choice([
         "gol",
@@ -951,9 +1182,7 @@ async def pen(ctx):
         "aut"
     ])
 
-    embed = discord.Embed(
-        color=discord.Color.blurple()
-    )
+    embed = discord.Embed()
 
     embed.add_field(
         name="👤 Penaltıyı Kullanan",
@@ -975,44 +1204,54 @@ async def pen(ctx):
     if sonuc == "gol":
 
         embed.title = "⚽ GOOOOOL!"
+
         embed.description = (
             "🔥 **TOP AĞLARDA!**\n"
             "Kaleci çaresiz kaldı."
         )
+
         embed.color = discord.Color.green()
 
     elif sonuc == "kaleci":
 
         embed.title = "🧤 KALECİ KURTARDI!"
+
         embed.description = (
             "🧤 **HARİKA KURTARIŞ!**\n"
             "Kaleci penaltıyı çıkardı."
         )
+
         embed.color = discord.Color.blue()
 
     elif sonuc == "direk":
 
         embed.title = "💥 DİREK!"
+
         embed.description = (
             "💥 **DİREKTEN DÖNDÜ!**\n"
             "İnanılmaz şanssızlık."
         )
+
         embed.color = discord.Color.orange()
 
     else:
 
         embed.title = "💨 AUT!"
+
         embed.description = (
             "💨 **TOP AUTA GİTTİ!**\n"
             "Penaltı kaçtı."
         )
+
         embed.color = discord.Color.red()
 
     embed.set_footer(
-        text="Premier Support • Penaltı Sistemi"
+        text="Premier Support • Penaltı Sistemi • 1 Saat Cooldown"
     )
 
-    await ctx.send(embed=embed)
+    await ctx.send(
+        embed=embed
+    )
 
 
 # =========================
@@ -1022,24 +1261,38 @@ async def pen(ctx):
 @bot.event
 async def on_command_error(ctx, error):
 
-    if isinstance(error, commands.MissingRequiredArgument):
+    if isinstance(
+        error,
+        commands.MissingRequiredArgument
+    ):
+
         await ctx.send(
             "❌ Eksik bilgi girdin. Kullanımı kontrol et."
         )
+
         return
 
-    if isinstance(error, commands.MemberNotFound):
+    if isinstance(
+        error,
+        commands.MemberNotFound
+    ):
+
         await ctx.send(
             "❌ Kullanıcı bulunamadı. "
             "Kullanıcıyı etiketlediğinden emin ol."
         )
+
         return
 
-    print(f"Komut hatası: {error}")
+    print(
+        f"Komut hatası: {error}"
+    )
 
 
 # =========================
 # BOTU BAŞLAT
 # =========================
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+bot.run(
+    os.getenv("DISCORD_TOKEN")
+)
