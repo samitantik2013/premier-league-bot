@@ -93,13 +93,6 @@ ANT_SISTEM_KULLANICI_ID = 1547848567287320636
 # Ticket sistemi
 TICKET_KULLANICI_ID = 1547848567287320636
 TICKET_KATEGORI_ID = 1553136756147224588
-TICKET_YETKILI_ROL_ID = 1553136385538654329
-
-KAYIT_KANAL_ID = 1553136976029417545
-KAYIT_YETKILI_ROL_ID = 1553136384670441524
-KAYITSIZ_ROL_ID = 1553136398146736190
-FUTBOLCU_ROL_ID = 1553136443407212644
-TEKNIK_DIREKTOR_ROL_ID = 1553136397102227588
 
 
 # =========================================================
@@ -391,7 +384,7 @@ class IstatistikView(View):
     def __init__(self, member):
 
         super().__init__(
-            timeout=None
+            timeout=120
         )
 
         self.member = member
@@ -512,57 +505,90 @@ async def s(ctx):
 # HAFTALIK LİDERLİK
 # =========================================================
 
-def haftalik_liderlik_embed(page=0):
+def haftalik_liderlik_embed(
+    page=0
+):
 
     siralama = haftalik_siralama()
+
     per_page = 10
+
     baslangic = page * per_page
-    oyuncular = siralama[baslangic:baslangic + per_page]
+
+    oyuncular = siralama[
+        baslangic:
+        baslangic + per_page
+    ]
 
     embed = discord.Embed(
         title="🏆 HAFTALIK LİDERLİK",
-        description="Bu haftanın en iyi oyuncuları.",
+        description=(
+            "Bu haftanın en iyi oyuncuları."
+        ),
         color=discord.Color.gold()
     )
 
     if not oyuncular:
-        embed.description = "Henüz haftalık sıralamada oyuncu yok."
+
+        embed.description = (
+            "Henüz haftalık sıralamada oyuncu yok."
+        )
+
         return embed
 
-    for index, (user_id, toplam) in enumerate(oyuncular, start=baslangic + 1):
+    satirlar = []
 
-        member = bot.get_user(user_id)
-        isim = member.mention if member else f"<@{user_id}>"
+    for index, (
+        user_id,
+        toplam
+    ) in enumerate(
+        oyuncular,
+        start=baslangic + 1
+    ):
+
+        member = bot.get_user(
+            user_id
+        )
+
+        isim = (
+            member.mention
+            if member
+            else f"<@{user_id}>"
+        )
 
         if index == 1:
             medal = "🥇"
+
         elif index == 2:
             medal = "🥈"
+
         elif index == 3:
             medal = "🥉"
+
         else:
-            medal = f"#{index}"
+            medal = f"`#{index}`"
 
-        stats = haftalik.get(user_id, {})
-        detaylar = [
-            f"**{stat}:** `{miktar}`"
-            for stat, miktar in stats.items()
-            if miktar
-        ]
-
-        detay = " • ".join(detaylar) if detaylar else "Nitelik detayı yok."
-
-        # Her oyuncuyu ayrı field yapıyoruz; böylece 10 oyuncunun
-        # nitelik detayları tek bir description limitine takılmıyor.
-        embed.add_field(
-            name=f"{medal} {isim} — Toplam: {toplam}",
-            value=detay,
-            inline=False
+        satirlar.append(
+            f"{medal} {isim} — **{toplam}**"
         )
 
-    toplam_sayfa = max(1, (len(siralama) + per_page - 1) // per_page)
-    embed.set_footer(text=f"Sayfa {page + 1}/{toplam_sayfa}")
+    embed.description = "\n".join(
+        satirlar
+    )
+
+    toplam_sayfa = max(
+        1,
+        (
+            len(siralama) + per_page - 1
+        ) // per_page
+    )
+
+    embed.set_footer(
+        text=f"Sayfa {page + 1}/{toplam_sayfa}"
+    )
+
     return embed
+
 
 class HaftalikSiralamaView(View):
 
@@ -1203,347 +1229,6 @@ async def antsistem(ctx):
 
 
 # =========================================================
-# KAYIT SİSTEMİ
-# =========================================================
-
-class KayitOnayView(View):
-
-    def __init__(self, hedef_id, isim, kayit_eden_id):
-        super().__init__(timeout=300)
-        self.hedef_id = hedef_id
-        self.isim = isim
-        self.kayit_eden_id = kayit_eden_id
-        self.tiklandi = False
-
-    async def kayit_yap(self, interaction, rol_id, rol_adi):
-
-        if self.tiklandi:
-            await interaction.response.send_message(
-                "❌ Bu kayıt işlemi zaten tamamlandı.",
-                ephemeral=True
-            )
-            return
-
-        if not rol_var_mi(interaction.user, KAYIT_YETKILI_ROL_ID):
-            await interaction.response.send_message(
-                "❌ Gerekli Kayıt Yetkilisi rolüne sahip değilsin.",
-                ephemeral=True
-            )
-            return
-
-        guild = interaction.guild
-        if guild is None:
-            await interaction.response.send_message(
-                "❌ Bu işlem sadece sunucuda kullanılabilir.",
-                ephemeral=True
-            )
-            return
-
-        uye = guild.get_member(self.hedef_id)
-        rol = guild.get_role(rol_id)
-        kayitsiz = guild.get_role(KAYITSIZ_ROL_ID)
-
-        if uye is None:
-            await interaction.response.send_message(
-                "❌ Kullanıcı sunucuda bulunamadı.",
-                ephemeral=True
-            )
-            return
-
-        if rol is None or kayitsiz is None:
-            await interaction.response.send_message(
-                "❌ Kayıt rollerinden biri bulunamadı.",
-                ephemeral=True
-            )
-            return
-
-        try:
-            await uye.edit(
-                nick=self.isim,
-                reason=f"Kayıt: {interaction.user} - {rol_adi}"
-            )
-
-            if kayitsiz in uye.roles:
-                await uye.remove_roles(
-                    kayitsiz,
-                    reason="Kayıt tamamlandı."
-                )
-
-            await uye.add_roles(
-                rol,
-                reason=f"Kayıt rolü: {rol_adi}"
-            )
-
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                "❌ Kullanıcının ismini veya rollerini değiştirmek için yetkim yok.",
-                ephemeral=True
-            )
-            return
-        except discord.HTTPException:
-            await interaction.response.send_message(
-                "❌ Kayıt yapılırken Discord tarafında bir hata oluştu.",
-                ephemeral=True
-            )
-            return
-
-        self.tiklandi = True
-        for item in self.children:
-            item.disabled = True
-
-        embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed()
-        embed.title = "✅ KAYIT TAMAMLANDI"
-        embed.color = discord.Color.green()
-        embed.add_field(
-            name="👤 Kayıt Olan",
-            value=f"{uye.mention} (`{uye.id}`)",
-            inline=False
-        )
-        embed.add_field(
-            name="📝 İsim",
-            value=self.isim,
-            inline=True
-        )
-        embed.add_field(
-            name="⚽ Rol",
-            value=rol_adi,
-            inline=True
-        )
-        embed.add_field(
-            name="🛡️ Kaydı Yapan",
-            value=interaction.user.mention,
-            inline=False
-        )
-
-        await interaction.response.edit_message(
-            embed=embed,
-            view=self
-        )
-
-
-    @discord.ui.button(
-        label="Futbolcu",
-        emoji="⚽",
-        style=discord.ButtonStyle.success,
-        custom_id="kayit_futbolcu"
-    )
-    async def futbolcu(self, interaction, button):
-        await self.kayit_yap(
-            interaction,
-            FUTBOLCU_ROL_ID,
-            "Futbolcu"
-        )
-
-
-    @discord.ui.button(
-        label="Teknik Direktör",
-        emoji="🧠",
-        style=discord.ButtonStyle.primary,
-        custom_id="kayit_teknik_direktor"
-    )
-    async def teknik_direktor(self, interaction, button):
-        await self.kayit_yap(
-            interaction,
-            TEKNIK_DIREKTOR_ROL_ID,
-            "Teknik Direktör"
-        )
-
-
-@bot.command(name="k")
-async def k(ctx, uye: discord.Member, *, isim):
-
-    if ctx.channel.id != KAYIT_KANAL_ID:
-        await ctx.send(
-            f"❌ Bu komut sadece <#{KAYIT_KANAL_ID}> kanalında kullanılabilir.",
-            delete_after=5
-        )
-        return
-
-    if not rol_var_mi(ctx.author, KAYIT_YETKILI_ROL_ID):
-        await ctx.send(
-            "❌ Gerekli Kayıt Yetkilisi rolüne sahip değilsin.",
-            delete_after=5
-        )
-        return
-
-    isim = isim.strip()
-    if not isim:
-        await ctx.send(
-            "❌ Doğru kullanım: `.k @kisi İsim Soyisim`",
-            delete_after=5
-        )
-        return
-
-    kayitsiz = ctx.guild.get_role(KAYITSIZ_ROL_ID)
-    if kayitsiz is None:
-        await ctx.send(
-            "❌ Kayıtsız rolü bulunamadı.",
-            delete_after=5
-        )
-        return
-
-    if kayitsiz not in uye.roles:
-        await ctx.send(
-            "❌ Bu kullanıcı zaten kayıtlı görünüyor.",
-            delete_after=5
-        )
-        return
-
-    embed = discord.Embed(
-        title="📋 KAYIT ONAYI",
-        description=(
-            "Aşağıdaki kullanıcı için kayıt işlemi başlatıldı.\n"
-            "Kayıt işlemini tamamlamak için uygun rol butonuna basın."
-        ),
-        color=discord.Color.blurple()
-    )
-    embed.add_field(
-        name="👤 Kayıt Olacak",
-        value=f"{uye.mention} (`{uye.id}`)",
-        inline=False
-    )
-    embed.add_field(
-        name="📝 Kayıt Olacağı İsim",
-        value=f"`{isim}`",
-        inline=True
-    )
-    embed.add_field(
-        name="🛡️ Kayıt Eden",
-        value=f"{ctx.author.mention}",
-        inline=True
-    )
-    embed.set_footer(text="Premier League #FC26 • Kayıt Sistemi")
-
-    await ctx.send(
-        embed=embed,
-        view=KayitOnayView(uye.id, isim, ctx.author.id)
-    )
-
-
-@bot.command(name="kver")
-async def kver(ctx, uye: discord.Member):
-
-    if not rol_var_mi(ctx.author, KAYIT_YETKILI_ROL_ID):
-        await ctx.send(
-            "❌ Gerekli Kayıt Yetkilisi rolüne sahip değilsin.",
-            delete_after=5
-        )
-        return
-
-    kayitsiz = ctx.guild.get_role(KAYITSIZ_ROL_ID)
-    if kayitsiz is None:
-        await ctx.send(
-            "❌ Kayıtsız rolü bulunamadı.",
-            delete_after=5
-        )
-        return
-
-    try:
-        await uye.edit(
-            nick="Kayıtsız",
-            reason=f"Kayıt geri alındı: {ctx.author}"
-        )
-
-        # Kayıt rollerini kaldır.
-        for rol_id in [FUTBOLCU_ROL_ID, TEKNIK_DIREKTOR_ROL_ID]:
-            rol = ctx.guild.get_role(rol_id)
-            if rol is not None and rol in uye.roles:
-                await uye.remove_roles(
-                    rol,
-                    reason="Kayıt geri alındı."
-                )
-
-        if kayitsiz not in uye.roles:
-            await uye.add_roles(
-                kayitsiz,
-                reason="Kayıt geri alındı."
-            )
-
-        await ctx.send(
-            f"✅ {uye.mention} tekrar **Kayıtsız** yapıldı."
-        )
-
-    except discord.Forbidden:
-        await ctx.send(
-            "❌ Kullanıcının ismini veya rollerini değiştirmek için yetkim yok."
-        )
-    except discord.HTTPException:
-        await ctx.send(
-            "❌ Kayıt geri alınırken Discord tarafında bir hata oluştu."
-        )
-
-
-# =========================================================
-# ÜYE GİRİŞİ
-# =========================================================
-
-@bot.event
-async def on_member_join(member):
-
-    kayitsiz = member.guild.get_role(KAYITSIZ_ROL_ID)
-
-    if kayitsiz is None:
-        return
-
-    try:
-        await member.edit(
-            nick="Kayıtsız",
-            reason="Sunucuya yeni katıldı."
-        )
-    except (discord.Forbidden, discord.HTTPException):
-        pass
-
-    try:
-        await member.add_roles(
-            kayitsiz,
-            reason="Sunucuya yeni katıldı."
-        )
-    except (discord.Forbidden, discord.HTTPException):
-        pass
-
-    kanal = member.guild.get_channel(KAYIT_KANAL_ID)
-    if not isinstance(kanal, discord.TextChannel):
-        return
-
-    toplam = member.guild.member_count or len(member.guild.members)
-    hesap_tarihi = discord.utils.format_dt(member.created_at, "D")
-    hesap_saati = discord.utils.format_dt(member.created_at, "t")
-
-    embed = discord.Embed(
-        title="👋 Yeni Bir Kullanıcı Katıldı!",
-        description=(
-            f"**Premier League #FC26** sunucumuza hoş geldin "
-            f"**{member.display_name}**!\n\n"
-            f"Seninle birlikte **{toplam}** kişiyiz. Kayıt olmak için "
-            f"<@&{KAYIT_YETKILI_ROL_ID}> rolündeki yetkililerimizi beklemen yeterlidir."
-        ),
-        color=discord.Color.green()
-    )
-    embed.add_field(
-        name="👤 Kullanıcı ID",
-        value=f"`{member.id}`",
-        inline=True
-    )
-    embed.add_field(
-        name="📅 Hesap Oluşturulma Tarihi",
-        value=f"{hesap_tarihi} {hesap_saati}",
-        inline=True
-    )
-    embed.add_field(
-        name="🛡️ Güvenilirlik Durumu",
-        value="Güvenilir",
-        inline=True
-    )
-    embed.set_thumbnail(url=member.display_avatar.url)
-    embed.set_footer(text="Premier League #FC26 • Kayıt Sistemi")
-
-    await kanal.send(
-        content=f"👋 Yeni kullanıcı: {member.mention}",
-        embed=embed
-    )
-
-
-# =========================================================
 # TICKET SİSTEMİ
 # =========================================================
 
@@ -1648,7 +1333,7 @@ class TicketPanelView(View):
                 return
 
         yetkili_rol = guild.get_role(
-            TICKET_YETKILI_ROL_ID
+            YONETIM_ROL_ID
         )
 
         if yetkili_rol is None:
@@ -2445,7 +2130,7 @@ async def sil(
 # =========================================================
 
 @bot.command()
-async def haftaliksifirla(ctx, *, hedef: str):
+async def haftaliksifirla(ctx):
 
     if not rol_var_mi(
         ctx.author,
@@ -2453,34 +2138,15 @@ async def haftaliksifirla(ctx, *, hedef: str):
     ):
 
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
 
         return
 
-    if hedef.strip() == "@everyone":
-
-        haftalik.clear()
-
-        await ctx.send(
-            "✅ Herkesin haftalık istatistikleri sıfırlandı."
-        )
-
-        return
-
-    if not ctx.message.mentions:
-
-        await ctx.send(
-            "❌ Kullanıcı bulunamadı. **@kisi** veya **@everyone** kullan."
-        )
-
-        return
-
-    uye = ctx.message.mentions[0]
-    haftalik.pop(uye.id, None)
+    haftalik.clear()
 
     await ctx.send(
-        f"✅ {uye.mention} adlı kullanıcının haftalık istatistikleri sıfırlandı."
+        "✅ Haftalık istatistikler sıfırlandı."
     )
 
 
@@ -2489,7 +2155,7 @@ async def haftaliksifirla(ctx, *, hedef: str):
 # =========================================================
 
 @bot.command()
-async def alltimesifirla(ctx, *, hedef: str):
+async def alltimesifirla(ctx):
 
     if not rol_var_mi(
         ctx.author,
@@ -2497,34 +2163,15 @@ async def alltimesifirla(ctx, *, hedef: str):
     ):
 
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
 
         return
 
-    if hedef.strip() == "@everyone":
-
-        all_time.clear()
-
-        await ctx.send(
-            "✅ Herkesin All Time istatistikleri sıfırlandı."
-        )
-
-        return
-
-    if not ctx.message.mentions:
-
-        await ctx.send(
-            "❌ Kullanıcı bulunamadı. **@kisi** veya **@everyone** kullan."
-        )
-
-        return
-
-    uye = ctx.message.mentions[0]
-    all_time.pop(uye.id, None)
+    all_time.clear()
 
     await ctx.send(
-        f"✅ {uye.mention} adlı kullanıcının All Time istatistikleri sıfırlandı."
+        "✅ All Time istatistikler sıfırlandı."
     )
 
 
@@ -2547,7 +2194,7 @@ async def alltimesil(
     ):
 
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
 
         return
@@ -2616,7 +2263,7 @@ async def alltimesil(
 # =========================================================
 
 @bot.command()
-async def aktar(ctx, uye: discord.Member):
+async def aktar(ctx):
 
     if not rol_var_mi(
         ctx.author,
@@ -2624,35 +2271,33 @@ async def aktar(ctx, uye: discord.Member):
     ):
 
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
 
         return
 
-    stats = haftalik.get(uye.id)
+    for user_id, stats in haftalik.items():
 
-    if not stats:
-
-        await ctx.send(
-            f"❌ {uye.mention} adlı kullanıcının aktarılacak haftalık istatistiği yok."
+        all_time.setdefault(
+            user_id,
+            {}
         )
 
-        return
+        for stat, miktar in stats.items():
 
-    all_time.setdefault(
-        uye.id,
-        {}
-    )
-
-    for stat, miktar in stats.items():
-
-        all_time[uye.id][stat] = (
-            all_time[uye.id].get(stat, 0) + miktar
-        )
+            all_time[
+                user_id
+            ][stat] = (
+                all_time[
+                    user_id
+                ].get(stat, 0)
+                + miktar
+            )
 
     await ctx.send(
-        f"✅ {uye.mention} adlı kullanıcının haftalık istatistikleri All Time'a aktarıldı."
+        "✅ Haftalık istatistikler All Time'a aktarıldı."
     )
+
 
 # =========================================================
 # BAN
@@ -2672,7 +2317,7 @@ async def ban(
     ):
 
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
 
         return
@@ -2711,7 +2356,7 @@ async def unban(
     ):
 
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
 
         return
@@ -2816,7 +2461,7 @@ async def mute(
         YONETIM_ROL_ID
     ):
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
         return
 
@@ -2898,7 +2543,7 @@ async def unmute(
         YONETIM_ROL_ID
     ):
         await ctx.send(
-            "❌ Gerekli yönetim rolüne sahip değilsin."
+            "❌ Yetkin yok."
         )
         return
 
@@ -3049,77 +2694,6 @@ async def msil(
             "❌ Mesajlar silinirken Discord tarafında bir hata oluştu.",
             delete_after=5
         )
-
-
-# =========================================================
-# KOMUT HATALARI / DOĞRU KULLANIM
-# =========================================================
-
-@bot.event
-async def on_command_error(ctx, error):
-
-    if isinstance(error, commands.CommandNotFound):
-        return
-
-    komut = getattr(ctx.command, "name", "")
-
-    kullanimlar = {
-        "ban": ".ban @kisi [sebep]",
-        "unban": ".unban KULLANICI_ID",
-        "mute": ".mute @kisi 5 dakika sebep",
-        "unmute": ".unmute @kisi",
-        "k": ".k @kisi İsim Soyisim",
-        "kver": ".kver @kisi",
-        "msil": ".msil 10",
-        "ekle": ".ekle @kisi 10 Dribbling",
-        "sil": ".sil @kisi 10 Dribbling",
-        "haftaliksifirla": ".haftaliksifirla @kisi veya @everyone",
-        "alltimesifirla": ".alltimesifirla @kisi veya @everyone",
-        "haftaliksifirla": ".haftaliksifirla @kisi",
-        "alltimesifirla": ".alltimesifirla @kisi",
-        "aktar": ".aktar @kisi",
-    }
-
-    if isinstance(error, commands.MissingRequiredArgument):
-        kullanim = kullanimlar.get(komut)
-        if kullanim:
-            await ctx.send(
-                f"❌ Eksik bilgi.\n**Doğru kullanım:** `{kullanim}`",
-                delete_after=7
-            )
-        else:
-            await ctx.send(
-                "❌ Eksik bilgi. Komutun kullanımını kontrol et.",
-                delete_after=7
-            )
-        return
-
-    if isinstance(error, commands.MemberNotFound):
-        kullanim = kullanimlar.get(komut)
-        await ctx.send(
-            "❌ Kullanıcı bulunamadı.\n"
-            + (f"**Doğru kullanım:** `{kullanim}`" if kullanim else ""),
-            delete_after=7
-        )
-        return
-
-    if isinstance(error, commands.BadArgument):
-        kullanim = kullanimlar.get(komut)
-        await ctx.send(
-            "❌ Girdi hatalı.\n"
-            + (f"**Doğru kullanım:** `{kullanim}`" if kullanim else ""),
-            delete_after=7
-        )
-        return
-
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send(
-            "❌ Gerekli yetkiye sahip değilsin.",
-            delete_after=5
-        )
-        return
-
-    print(f"Komut hatası ({komut}): {error}")
 
 
 # =========================================================
