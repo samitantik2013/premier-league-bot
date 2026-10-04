@@ -529,9 +529,8 @@ def haftalik_liderlik_embed(page=0):
         embed.description = "Henüz haftalık sıralamada oyuncu yok."
         return embed
 
-    satirlar = []
-
     for index, (user_id, toplam) in enumerate(oyuncular, start=baslangic + 1):
+
         member = bot.get_user(user_id)
         isim = member.mention if member else f"<@{user_id}>"
 
@@ -542,14 +541,24 @@ def haftalik_liderlik_embed(page=0):
         elif index == 3:
             medal = "🥉"
         else:
-            medal = f"`#{index}`"
+            medal = f"#{index}"
 
         stats = haftalik.get(user_id, {})
-        detaylar = [f"{stat}: {miktar}" for stat, miktar in stats.items() if miktar]
-        detay = " • ".join(detaylar) if detaylar else "Nitelik detayı yok."
-        satirlar.append(f"{medal} {isim} — **Toplam: {toplam}**\n{detay}")
+        detaylar = [
+            f"**{stat}:** `{miktar}`"
+            for stat, miktar in stats.items()
+            if miktar
+        ]
 
-    embed.description = "\n\n".join(satirlar)
+        detay = " • ".join(detaylar) if detaylar else "Nitelik detayı yok."
+
+        # Her oyuncuyu ayrı field yapıyoruz; böylece 10 oyuncunun
+        # nitelik detayları tek bir description limitine takılmıyor.
+        embed.add_field(
+            name=f"{medal} {isim} — Toplam: {toplam}",
+            value=detay,
+            inline=False
+        )
 
     toplam_sayfa = max(1, (len(siralama) + per_page - 1) // per_page)
     embed.set_footer(text=f"Sayfa {page + 1}/{toplam_sayfa}")
