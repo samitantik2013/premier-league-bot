@@ -677,10 +677,7 @@ class HaftalikSiralamaView(View):
 # .HAFTALIK
 # =========================================================
 
-@bot.command(
-    name="haftalik",
-    aliases=["haftalik_cmd"]
-)
+@bot.command(name="haftalik")
 async def haftalik(ctx):
 
     await ctx.send(
@@ -1214,10 +1211,7 @@ async def penalti_antrenmani(
 # .ANTSISTEM
 # =========================================================
 
-@bot.command(
-    name="antsistem",
-    aliases=["antpanel"]
-)
+@bot.command(name="antsistem")
 async def antsistem(ctx):
 
     if ctx.author.id != ANT_SISTEM_KULLANICI_ID:
@@ -2478,7 +2472,7 @@ async def sil(
 # =========================================================
 
 @bot.command()
-async def haftaliksifirla(ctx):
+async def haftaliksifirla(ctx, uye: discord.Member):
 
     if not rol_var_mi(
         ctx.author,
@@ -2491,10 +2485,10 @@ async def haftaliksifirla(ctx):
 
         return
 
-    haftalik.clear()
+    haftalik.pop(uye.id, None)
 
     await ctx.send(
-        "✅ Haftalık istatistikler sıfırlandı."
+        f"✅ {uye.mention} adlı kullanıcının haftalık istatistikleri sıfırlandı."
     )
 
 
@@ -2503,7 +2497,7 @@ async def haftaliksifirla(ctx):
 # =========================================================
 
 @bot.command()
-async def alltimesifirla(ctx):
+async def alltimesifirla(ctx, uye: discord.Member):
 
     if not rol_var_mi(
         ctx.author,
@@ -2516,10 +2510,10 @@ async def alltimesifirla(ctx):
 
         return
 
-    all_time.clear()
+    all_time.pop(uye.id, None)
 
     await ctx.send(
-        "✅ All Time istatistikler sıfırlandı."
+        f"✅ {uye.mention} adlı kullanıcının All Time istatistikleri sıfırlandı."
     )
 
 
@@ -2543,6 +2537,15 @@ async def alltimesil(
 
         await ctx.send(
             "❌ Gerekli yönetim rolüne sahip değilsin."
+        )
+
+        return
+
+    if miktar <= 0:
+
+        await ctx.send(
+            "❌ Miktar 0'dan büyük olmalı.\n"
+            "**Doğru kullanım:** `.alltimesil @kisi 10 Dribbling`"
         )
 
         return
@@ -2611,7 +2614,7 @@ async def alltimesil(
 # =========================================================
 
 @bot.command()
-async def aktar(ctx):
+async def aktar(ctx, uye: discord.Member):
 
     if not rol_var_mi(
         ctx.author,
@@ -2624,26 +2627,28 @@ async def aktar(ctx):
 
         return
 
-    for user_id, stats in haftalik.items():
+    if uye.id not in haftalik or not haftalik[uye.id]:
 
-        all_time.setdefault(
-            user_id,
-            {}
+        await ctx.send(
+            f"❌ {uye.mention} adlı kullanıcının aktarılacak haftalık istatistiği yok."
         )
 
-        for stat, miktar in stats.items():
+        return
 
-            all_time[
-                user_id
-            ][stat] = (
-                all_time[
-                    user_id
-                ].get(stat, 0)
-                + miktar
-            )
+    all_time.setdefault(
+        uye.id,
+        {}
+    )
+
+    for stat, miktar in haftalik[uye.id].items():
+
+        all_time[uye.id][stat] = (
+            all_time[uye.id].get(stat, 0)
+            + miktar
+        )
 
     await ctx.send(
-        "✅ Haftalık istatistikler All Time'a aktarıldı."
+        f"✅ {uye.mention} adlı kullanıcının haftalık istatistikleri All Time'a aktarıldı."
     )
 
 
@@ -3048,61 +3053,109 @@ async def msil(
 # KOMUT HATALARI / DOĞRU KULLANIM
 # =========================================================
 
+KOMUT_KULLANIMLARI = {
+    "s": ".s",
+    "haftalik": ".haftalik",
+    "antsistem": ".antsistem",
+    "k": ".k @kisi İsim Soyisim",
+    "kver": ".kver @kisi",
+    "ticket": ".ticket",
+    "ekle": ".ekle @kisi 10 Dribbling",
+    "sil": ".sil @kisi 10 Dribbling",
+    "haftaliksifirla": ".haftaliksifirla @kisi",
+    "alltimesifirla": ".alltimesifirla @kisi",
+    "alltimesil": ".alltimesil @kisi 10 Dribbling",
+    "aktar": ".aktar @kisi",
+    "ban": ".ban @kisi [sebep]",
+    "unban": ".unban KULLANICI_ID",
+    "mute": ".mute @kisi 5 dakika sebep",
+    "unmute": ".unmute @kisi",
+    "gonder": ".gonder mesaj",
+    "msil": ".msil 10",
+}
+
+
 @bot.event
 async def on_command_error(ctx, error):
 
+    # Yerel command handler hataları bazen CommandInvokeError içine sarılabilir.
+    # Gerçek hatayı ayırıp okunabilir şekilde ele alıyoruz.
+    if isinstance(error, commands.CommandInvokeError):
+        original = error.original
+        if isinstance(original, discord.Forbidden):
+            await ctx.send(
+                "❌ Botun bu işlemi yapmak için gerekli Discord yetkisi yok.",
+                delete_after=6
+            )
+            return
+
     if isinstance(error, commands.CommandNotFound):
+        await ctx.send(
+            "❌ Böyle bir komut yok. Komut listesini görmek için `.s` yazabilirsin.",
+            delete_after=6
+        )
         return
 
     komut = getattr(ctx.command, "name", "")
-
-    kullanimlar = {
-        "ban": ".ban @kisi [sebep]",
-        "unban": ".unban KULLANICI_ID",
-        "mute": ".mute @kisi 5 dakika sebep",
-        "unmute": ".unmute @kisi",
-        "k": ".k @kisi İsim Soyisim",
-        "kver": ".kver @kisi",
-        "msil": ".msil 10",
-        "ekle": ".ekle @kisi 10 Dribbling",
-        "sil": ".sil @kisi 10 Dribbling",
-    }
+    kullanim = KOMUT_KULLANIMLARI.get(komut)
 
     if isinstance(error, commands.MissingRequiredArgument):
-        kullanim = kullanimlar.get(komut)
-        if kullanim:
-            await ctx.send(
-                f"❌ Eksik bilgi.\n**Doğru kullanım:** `{kullanim}`",
-                delete_after=7
-            )
-        else:
-            await ctx.send(
-                "❌ Eksik bilgi. Komutun kullanımını kontrol et.",
-                delete_after=7
-            )
+        await ctx.send(
+            "❌ Eksik bilgi.\n"
+            f"**Doğru kullanım:** `{kullanim or f'.{komut}'}`",
+            delete_after=7
+        )
+        return
+
+    if isinstance(error, commands.TooManyArguments):
+        await ctx.send(
+            "❌ Fazla parametre girdin.\n"
+            f"**Doğru kullanım:** `{kullanim or f'.{komut}'}`",
+            delete_after=7
+        )
         return
 
     if isinstance(error, commands.MemberNotFound):
-        kullanim = kullanimlar.get(komut)
         await ctx.send(
             "❌ Kullanıcı bulunamadı.\n"
-            + (f"**Doğru kullanım:** `{kullanim}`" if kullanim else ""),
+            f"**Doğru kullanım:** `{kullanim or f'.{komut}'}`",
+            delete_after=7
+        )
+        return
+
+    if isinstance(error, commands.UserNotFound):
+        await ctx.send(
+            "❌ Kullanıcı bulunamadı.\n"
+            f"**Doğru kullanım:** `{kullanim or f'.{komut}'}`",
             delete_after=7
         )
         return
 
     if isinstance(error, commands.BadArgument):
-        kullanim = kullanimlar.get(komut)
         await ctx.send(
             "❌ Girdi hatalı.\n"
-            + (f"**Doğru kullanım:** `{kullanim}`" if kullanim else ""),
+            f"**Doğru kullanım:** `{kullanim or f'.{komut}'}`",
             delete_after=7
         )
         return
 
     if isinstance(error, commands.MissingPermissions):
         await ctx.send(
-            "❌ Gerekli yetkiye sahip değilsin.",
+            "❌ Gerekli Discord yetkisine sahip değilsin.",
+            delete_after=5
+        )
+        return
+
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send(
+            "❌ Bu komutu kullanmak için gerekli yetkiye sahip değilsin.",
+            delete_after=5
+        )
+        return
+
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(
+            f"❌ Bu komut için **{error.retry_after:.1f} saniye** beklemelisin.",
             delete_after=5
         )
         return
