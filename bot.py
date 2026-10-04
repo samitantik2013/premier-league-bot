@@ -674,7 +674,7 @@ class HaftalikSiralamaView(View):
     name="haftalik",
     aliases=["haftalik_cmd"]
 )
-async def haftalik(ctx):
+async def haftalik_cmd(ctx):
 
     await ctx.send(
         embed=haftalik_liderlik_embed(0),
@@ -2392,95 +2392,21 @@ async def unban(
 # MUTE
 # =========================================================
 
-
-def mute_suresi_cevir(sayi, birim):
-
-    birim = komut_normalize(birim)
-
-    if birim in ["saniye", "saniyelik"]:
-        return sayi
-
-    if birim in ["dakika", "dakikalik"]:
-        return sayi * 60
-
-    if birim in ["saat", "saatlik"]:
-        return sayi * 60 * 60
-
-    if birim in ["gun", "gunluk"]:
-        return sayi * 60 * 60 * 24
-
-    return None
-
-
-async def mute_suresi_bitir(guild_id, user_id, mute_rol_id, saniye):
-
-    await asyncio.sleep(saniye)
-
-    guild = bot.get_guild(guild_id)
-
-    if guild is None:
-        return
-
-    uye = guild.get_member(user_id)
-
-    if uye is None:
-        return
-
-    rol = guild.get_role(mute_rol_id)
-
-    if rol is None:
-        return
-
-    if rol in uye.roles:
-
-        try:
-            await uye.remove_roles(
-                rol,
-                reason="Mute süresi doldu."
-            )
-
-        except discord.Forbidden:
-            pass
-
-        except discord.HTTPException:
-            pass
-
-
 @bot.command()
 async def mute(
     ctx,
-    uye: discord.Member,
-    sure: int,
-    birim: str,
-    *,
-    sebep
+    uye: discord.Member
 ):
 
     if not rol_var_mi(
         ctx.author,
         YONETIM_ROL_ID
     ):
+
         await ctx.send(
             "❌ Yetkin yok."
         )
-        return
 
-    if sure <= 0:
-        await ctx.send(
-            "❌ Süre 0'dan büyük olmalı."
-        )
-        return
-
-    saniye = mute_suresi_cevir(
-        sure,
-        birim
-    )
-
-    if saniye is None:
-        await ctx.send(
-            "❌ Geçersiz süre birimi.\n"
-            "Kullanım: `.mute @kişi 5 dakika sebep`"
-        )
         return
 
     rol = ctx.guild.get_role(
@@ -2488,43 +2414,27 @@ async def mute(
     )
 
     if rol is None:
+
         await ctx.send(
             "❌ Mute rolü bulunamadı."
         )
+
         return
 
     try:
 
         await uye.add_roles(
-            rol,
-            reason=sebep
+            rol
         )
 
         await ctx.send(
-            f"🔇 {uye.mention} susturuldu.\n"
-            f"⏱️ **Süre:** {sure} {birim}\n"
-            f"📋 **Sebep:** {sebep}"
-        )
-
-        asyncio.create_task(
-            mute_suresi_bitir(
-                ctx.guild.id,
-                uye.id,
-                MUTE_ROL_ID,
-                saniye
-            )
+            f"🔇 {uye.mention} susturuldu."
         )
 
     except discord.Forbidden:
 
         await ctx.send(
             "❌ Mute rolünü veremiyorum."
-        )
-
-    except discord.HTTPException:
-
-        await ctx.send(
-            "❌ Mute işlemi sırasında bir hata oluştu."
         )
 
 
@@ -2542,9 +2452,11 @@ async def unmute(
         ctx.author,
         YONETIM_ROL_ID
     ):
+
         await ctx.send(
             "❌ Yetkin yok."
         )
+
         return
 
     rol = ctx.guild.get_role(
@@ -2552,16 +2464,17 @@ async def unmute(
     )
 
     if rol is None:
+
         await ctx.send(
             "❌ Mute rolü bulunamadı."
         )
+
         return
 
     try:
 
         await uye.remove_roles(
-            rol,
-            reason="Manuel unmute."
+            rol
         )
 
         await ctx.send(
@@ -2572,12 +2485,6 @@ async def unmute(
 
         await ctx.send(
             "❌ Mute rolünü kaldıramıyorum."
-        )
-
-    except discord.HTTPException:
-
-        await ctx.send(
-            "❌ Unmute işlemi sırasında bir hata oluştu."
         )
 
 
