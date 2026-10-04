@@ -1241,8 +1241,7 @@ def ticket_panel_embed():
             "ticket açabilirsin.\n\n"
             "🎫 **Ticket Aç** butonuna basarak sana özel bir ticket "
             "kanalı oluşturabilirsin.\n\n"
-            "🔇 Özellikle **mute niteliğini almak** istiyorsan "
-            "ticketi açıp yetkili ekibini bekleyebilirsin.\n\n"
+           
             "⚠️ Gereksiz ticket açmamaya ve yetkili ekibini gereksiz "
             "yere etiketlememeye dikkat et."
         ),
