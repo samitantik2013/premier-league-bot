@@ -693,7 +693,7 @@ class HaftalikSiralamaView(View):
     name="haftalik",
     aliases=["haftalik_cmd"]
 )
-async def haftalik(ctx):
+async def haftalik_komutu(ctx):
 
     await ctx.send(
         embed=haftalik_liderlik_embed(0),
@@ -2490,7 +2490,7 @@ async def sil(
 # =========================================================
 
 @bot.command()
-async def haftaliksifirla(ctx, hedef: str):
+async def haftaliksifirla(ctx, hedef: str = None):
 
     if not rol_var_mi(
         ctx.author,
@@ -2539,7 +2539,7 @@ async def haftaliksifirla(ctx, hedef: str):
 # =========================================================
 
 @bot.command()
-async def alltimesifirla(ctx, hedef: str):
+async def alltimesifirla(ctx, hedef: str = None):
 
     if not rol_var_mi(
         ctx.author,
