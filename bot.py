@@ -391,7 +391,7 @@ class IstatistikView(View):
     def __init__(self, member):
 
         super().__init__(
-            timeout=120
+            timeout=None
         )
 
         self.member = member
@@ -512,102 +512,48 @@ async def s(ctx):
 # HAFTALIK LİDERLİK
 # =========================================================
 
-def haftalik_liderlik_embed(
-    page=0
-):
+def haftalik_liderlik_embed(page=0):
 
     siralama = haftalik_siralama()
-
     per_page = 10
-
     baslangic = page * per_page
-
-    oyuncular = siralama[
-        baslangic:
-        baslangic + per_page
-    ]
+    oyuncular = siralama[baslangic:baslangic + per_page]
 
     embed = discord.Embed(
         title="🏆 HAFTALIK LİDERLİK",
-        description=(
-            "Bu haftanın en iyi oyuncuları."
-        ),
+        description="Bu haftanın en iyi oyuncuları.",
         color=discord.Color.gold()
     )
 
     if not oyuncular:
-
-        embed.description = (
-            "Henüz haftalık sıralamada oyuncu yok."
-        )
-
+        embed.description = "Henüz haftalık sıralamada oyuncu yok."
         return embed
 
-    for index, (
-        user_id,
-        toplam
-    ) in enumerate(
-        oyuncular,
-        start=baslangic + 1
-    ):
+    satirlar = []
 
-        member = bot.get_user(
-            user_id
-        )
-
-        isim = (
-            member.mention
-            if member
-            else f"<@{user_id}>"
-        )
+    for index, (user_id, toplam) in enumerate(oyuncular, start=baslangic + 1):
+        member = bot.get_user(user_id)
+        isim = member.mention if member else f"<@{user_id}>"
 
         if index == 1:
             medal = "🥇"
-
         elif index == 2:
             medal = "🥈"
-
         elif index == 3:
             medal = "🥉"
-
         else:
-            medal = f"#{index}"
+            medal = f"`#{index}`"
 
-        stats = haftalik.get(
-            user_id,
-            {}
-        )
+        stats = haftalik.get(user_id, {})
+        detaylar = [f"{stat}: {miktar}" for stat, miktar in stats.items() if miktar]
+        detay = " • ".join(detaylar) if detaylar else "Nitelik detayı yok."
+        satirlar.append(f"{medal} {isim} — **Toplam: {toplam}**\n{detay}")
 
-        detaylar = [
-            f"**{stat}:** `{miktar}`"
-            for stat, miktar
-            in stats.items()
-            if miktar > 0
-        ]
+    embed.description = "\n\n".join(satirlar)
 
-        embed.add_field(
-            name=f"{medal} {isim} — Toplam: {toplam}",
-            value=(
-                " • ".join(detaylar)
-                if detaylar
-                else "Nitelik yok."
-            ),
-            inline=False
-        )
-
-    toplam_sayfa = max(
-        1,
-        (
-            len(siralama) + per_page - 1
-        ) // per_page
-    )
-
-    embed.set_footer(
-        text=f"Sayfa {page + 1}/{toplam_sayfa}"
-    )
-
+    toplam_sayfa = max(1, (len(siralama) + per_page - 1) // per_page)
+    embed.set_footer(text=f"Sayfa {page + 1}/{toplam_sayfa}")
     return embed
-
 
 class HaftalikSiralamaView(View):
 
@@ -2490,10 +2436,7 @@ async def sil(
 # =========================================================
 
 @bot.command()
-async def haftaliksifirla(
-    ctx,
-    uye: discord.Member
-):
+async def haftaliksifirla(ctx, *, hedef: str):
 
     if not rol_var_mi(
         ctx.author,
@@ -2506,10 +2449,26 @@ async def haftaliksifirla(
 
         return
 
-    haftalik.pop(
-        uye.id,
-        None
-    )
+    if hedef.strip() == "@everyone":
+
+        haftalik.clear()
+
+        await ctx.send(
+            "✅ Herkesin haftalık istatistikleri sıfırlandı."
+        )
+
+        return
+
+    if not ctx.message.mentions:
+
+        await ctx.send(
+            "❌ Kullanıcı bulunamadı. **@kisi** veya **@everyone** kullan."
+        )
+
+        return
+
+    uye = ctx.message.mentions[0]
+    haftalik.pop(uye.id, None)
 
     await ctx.send(
         f"✅ {uye.mention} adlı kullanıcının haftalık istatistikleri sıfırlandı."
@@ -2521,10 +2480,7 @@ async def haftaliksifirla(
 # =========================================================
 
 @bot.command()
-async def alltimesifirla(
-    ctx,
-    uye: discord.Member
-):
+async def alltimesifirla(ctx, *, hedef: str):
 
     if not rol_var_mi(
         ctx.author,
@@ -2537,10 +2493,26 @@ async def alltimesifirla(
 
         return
 
-    all_time.pop(
-        uye.id,
-        None
-    )
+    if hedef.strip() == "@everyone":
+
+        all_time.clear()
+
+        await ctx.send(
+            "✅ Herkesin All Time istatistikleri sıfırlandı."
+        )
+
+        return
+
+    if not ctx.message.mentions:
+
+        await ctx.send(
+            "❌ Kullanıcı bulunamadı. **@kisi** veya **@everyone** kullan."
+        )
+
+        return
+
+    uye = ctx.message.mentions[0]
+    all_time.pop(uye.id, None)
 
     await ctx.send(
         f"✅ {uye.mention} adlı kullanıcının All Time istatistikleri sıfırlandı."
@@ -2635,10 +2607,7 @@ async def alltimesil(
 # =========================================================
 
 @bot.command()
-async def aktar(
-    ctx,
-    uye: discord.Member
-):
+async def aktar(ctx, uye: discord.Member):
 
     if not rol_var_mi(
         ctx.author,
@@ -2651,9 +2620,7 @@ async def aktar(
 
         return
 
-    stats = haftalik.get(
-        uye.id
-    )
+    stats = haftalik.get(uye.id)
 
     if not stats:
 
@@ -2670,19 +2637,13 @@ async def aktar(
 
     for stat, miktar in stats.items():
 
-        all_time[
-            uye.id
-        ][stat] = (
-            all_time[
-                uye.id
-            ].get(stat, 0)
-            + miktar
+        all_time[uye.id][stat] = (
+            all_time[uye.id].get(stat, 0) + miktar
         )
 
     await ctx.send(
         f"✅ {uye.mention} adlı kullanıcının haftalık istatistikleri All Time'a aktarıldı."
     )
-
 
 # =========================================================
 # BAN
@@ -3103,6 +3064,8 @@ async def on_command_error(ctx, error):
         "msil": ".msil 10",
         "ekle": ".ekle @kisi 10 Dribbling",
         "sil": ".sil @kisi 10 Dribbling",
+        "haftaliksifirla": ".haftaliksifirla @kisi veya @everyone",
+        "alltimesifirla": ".alltimesifirla @kisi veya @everyone",
         "haftaliksifirla": ".haftaliksifirla @kisi",
         "alltimesifirla": ".alltimesifirla @kisi",
         "aktar": ".aktar @kisi",
