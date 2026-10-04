@@ -5,6 +5,8 @@ import random
 import re
 import os
 import asyncio
+import json
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 
@@ -157,6 +159,50 @@ ant_son_kullanim = {}
 gumus_son_kullanim = {}
 altin_son_kullanim = {}
 pen_son_kullanim = {}
+
+# Mesaj sayımları gün gün tutulur; böylece bot yeniden başlasa da korunur.
+MESAJ_DOSYASI = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "mesaj_istatistikleri.json"
+)
+
+try:
+    with open(MESAJ_DOSYASI, "r", encoding="utf-8") as dosya:
+        mesaj_istatistikleri = json.load(dosya)
+except (FileNotFoundError, json.JSONDecodeError, OSError):
+    mesaj_istatistikleri = {}
+
+
+def mesaj_istatistiklerini_kaydet():
+    gecici_dosya = MESAJ_DOSYASI + ".tmp"
+    with open(gecici_dosya, "w", encoding="utf-8") as dosya:
+        json.dump(mesaj_istatistikleri, dosya, ensure_ascii=False)
+    os.replace(gecici_dosya, MESAJ_DOSYASI)
+
+
+def mesaj_sayisi(user_id, baslangic=None):
+    kayit = mesaj_istatistikleri.get(str(user_id), {})
+    if baslangic is None:
+        return int(kayit.get("all_time", 0))
+
+    return sum(
+        int(adet)
+        for tarih, adet in kayit.get("daily", {}).items()
+        if tarih >= baslangic.isoformat()
+    )
+
+
+def mesaj_donem_baslangiclari(simdi):
+    bugun = simdi.replace(hour=0, minute=0, second=0, microsecond=0)
+    hafta = bugun - timedelta(days=bugun.weekday())
+    ay = bugun.replace(day=1)
+    return bugun, hafta, ay
+
+
+def herkes_etiketlendi(ctx, hedef):
+    return bool(ctx.message.mention_everyone) or (
+        hedef is not None and hedef.strip().lower() in {"@everyone", "everyone"}
+    )
 
 
 # =========================================================
@@ -509,6 +555,109 @@ async def s(ctx, uye: discord.Member = None):
         embed=embed,
         view=IstatistikView(member, ctx.author.id)
     )
+
+
+# =========================================================
+# MESAJ İSTATİSTİKLERİ
+# =========================================================
+
+@bot.event
+async def on_message(message):
+    if not message.author.bot:
+        user_id = str(message.author.id)
+        bugun = datetime.now().astimezone().date().isoformat()
+        kayit = mesaj_istatistikleri.setdefault(
+            user_id,
+            {"all_time": 0, "daily": {}}
+        )
+        kayit["all_time"] = int(kayit.get("all_time", 0)) + 1
+        gunluk = kayit.setdefault("daily", {})
+        gunluk[bugun] = int(gunluk.get(bugun, 0)) + 1
+        mesaj_istatistiklerini_kaydet()
+
+    await bot.process_commands(message)
+
+
+@bot.command()
+async def m(ctx, uye: discord.Member = None):
+    member = uye or ctx.author
+    bugun, hafta, ay = mesaj_donem_baslangiclari(datetime.now().astimezone())
+
+    embed = discord.Embed(
+        title=f"📊 Mesaj İstatistikleri • {member.display_name}",
+        color=discord.Color.blurple()
+    )
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(
+        name="📅 Bugün",
+        value=f"**{mesaj_sayisi(member.id, bugun.date())}** mesaj",
+        inline=True
+    )
+    embed.add_field(
+        name="📆 Bu Hafta",
+        value=f"**{mesaj_sayisi(member.id, hafta.date())}** mesaj",
+        inline=True
+    )
+    embed.add_field(
+        name="📈 Bu Ay",
+        value=f"**{mesaj_sayisi(member.id, ay.date())}** mesaj",
+        inline=True
+    )
+    embed.add_field(
+        name="🏆 Tüm Zamanlar",
+        value=f"**{mesaj_sayisi(member.id)}** mesaj",
+        inline=False
+    )
+    embed.set_footer(text="Mesaj sayımı botun çalıştığı tarihten itibaren tutulur.")
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def msifirla(ctx, hedef: str = None):
+    if not rol_var_mi(ctx.author, YONETIM_ROL_ID):
+        await ctx.send("❌ Bu komut için gerekli yönetim rolüne sahip değilsin.")
+        return
+
+    if herkes_etiketlendi(ctx, hedef):
+        mesaj_istatistikleri.clear()
+        mesaj_istatistiklerini_kaydet()
+        await ctx.send("✅ Herkesin mesaj istatistikleri sıfırlandı.")
+        return
+
+    uye = ctx.message.mentions[0] if ctx.message.mentions else None
+    if uye is None:
+        await ctx.send("❌ Kullanıcı bulunamadı. Kullanım: `.msifirla @kişi` veya `.msifirla @everyone`")
+        return
+
+    mesaj_istatistikleri.pop(str(uye.id), None)
+    mesaj_istatistiklerini_kaydet()
+    await ctx.send(f"✅ {uye.mention} kullanıcısının mesaj istatistikleri sıfırlandı.")
+
+
+@bot.command()
+async def antyenile(ctx, hedef: str = None):
+    if not rol_var_mi(ctx.author, YONETIM_ROL_ID):
+        await ctx.send("❌ Bu komut için gerekli yönetim rolüne sahip değilsin.")
+        return
+
+    if herkes_etiketlendi(ctx, hedef):
+        antrenman.clear()
+        ant_son_kullanim.clear()
+        gumus_son_kullanim.clear()
+        altin_son_kullanim.clear()
+        await ctx.send("✅ Herkesin normal, gümüş ve altın antrenman ilerlemesi sıfırlandı.")
+        return
+
+    uye = ctx.message.mentions[0] if ctx.message.mentions else None
+    if uye is None:
+        await ctx.send("❌ Kullanıcı bulunamadı. Kullanım: `.antyenile @kişi` veya `.antyenile @everyone`")
+        return
+
+    antrenman.pop(uye.id, None)
+    ant_son_kullanim.pop(uye.id, None)
+    gumus_son_kullanim.pop(uye.id, None)
+    altin_son_kullanim.pop(uye.id, None)
+    await ctx.send(f"✅ {uye.mention} kullanıcısının normal, gümüş ve altın antrenman ilerlemesi sıfırlandı.")
 
 
 # =========================================================
@@ -2504,7 +2653,7 @@ async def haftaliksifirla(ctx, hedef: str = None):
 
         return
 
-    if hedef.strip().lower() == "@everyone":
+    if herkes_etiketlendi(ctx, hedef):
 
         haftalik.clear()
 
@@ -2553,7 +2702,7 @@ async def alltimesifirla(ctx, hedef: str = None):
 
         return
 
-    if hedef.strip().lower() == "@everyone":
+    if herkes_etiketlendi(ctx, hedef):
 
         all_time.clear()
 
