@@ -388,13 +388,14 @@ def istatistik_embed(
 
 class IstatistikView(View):
 
-    def __init__(self, member):
+    def __init__(self, member, owner_id=None):
 
         super().__init__(
             timeout=120
         )
 
         self.member = member
+        self.owner_id = owner_id if owner_id is not None else member.id
 
     @discord.ui.button(
         label="📊 Haftalık",
@@ -406,7 +407,7 @@ class IstatistikView(View):
         button
     ):
 
-        if interaction.user.id != self.member.id:
+        if interaction.user.id != self.owner_id:
 
             await interaction.response.send_message(
                 "Bu menü sana ait değil.",
@@ -456,7 +457,7 @@ class IstatistikView(View):
         button
     ):
 
-        if interaction.user.id != self.member.id:
+        if interaction.user.id != self.owner_id:
 
             await interaction.response.send_message(
                 "Bu menü sana ait değil.",
@@ -488,9 +489,9 @@ class IstatistikView(View):
 # =========================================================
 
 @bot.command()
-async def s(ctx):
+async def s(ctx, uye: discord.Member = None):
 
-    member = ctx.author
+    member = uye or ctx.author
 
     data = all_time.get(
         member.id,
@@ -506,7 +507,7 @@ async def s(ctx):
 
     await ctx.send(
         embed=embed,
-        view=IstatistikView(member)
+        view=IstatistikView(member, ctx.author.id)
     )
 
 
@@ -3215,3 +3216,5 @@ if not TOKEN:
 bot.run(
     TOKEN
 )
+
+
