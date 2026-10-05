@@ -577,7 +577,7 @@ async def on_message(message):
 
         if message.content.strip().casefold() in {"sa", "slm"}:
             await message.channel.send(
-                "Aleyküm selam hoşgeldin #🎽・antrenman-merkezi burdan antrenman yapabilirsin:)"
+                "Aleyküm selam hoşgeldin <#1553136969050226890> burdan antrenman yapabilirsin:)"
             )
 
     await bot.process_commands(message)
@@ -3405,5 +3405,6 @@ if not TOKEN:
 bot.run(
     TOKEN
 )
+
 
 
