@@ -575,6 +575,11 @@ async def on_message(message):
         gunluk[bugun] = int(gunluk.get(bugun, 0)) + 1
         mesaj_istatistiklerini_kaydet()
 
+        if message.content.strip().casefold() in {"sa", "slm"}:
+            await message.channel.send(
+                "Aleyküm selam hoşgeldin #🎽・antrenman-merkezi burdan antrenman yapabilirsin:)"
+            )
+
     await bot.process_commands(message)
 
 
@@ -1486,9 +1491,10 @@ class KayitOnayView(View):
         for item in self.children:
             item.disabled = True
 
-        embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed()
-        embed.title = "✅ KAYIT TAMAMLANDI"
-        embed.color = discord.Color.green()
+        embed = discord.Embed(
+            title="✅ KAYIT TAMAMLANDI",
+            color=discord.Color.green()
+        )
         embed.add_field(
             name="👤 Kayıt Olan",
             value=f"{uye.mention} (`{uye.id}`)",
@@ -1509,10 +1515,11 @@ class KayitOnayView(View):
             value=interaction.user.mention,
             inline=False
         )
+        embed.set_footer(text="Premier League #FC26 • Kayıt Sistemi")
 
         await interaction.response.edit_message(
             embed=embed,
-            view=self
+            view=None
         )
 
 
@@ -1541,6 +1548,27 @@ class KayitOnayView(View):
             interaction,
             TEKNIK_DIREKTOR_ROL_ID,
             "Teknik Direktör"
+        )
+
+
+    @discord.ui.button(
+        label="İptal Et",
+        emoji="❌",
+        style=discord.ButtonStyle.danger
+    )
+    async def iptal_et(self, interaction, button):
+        if not rol_var_mi(interaction.user, KAYIT_YETKILI_ROL_ID):
+            await interaction.response.send_message(
+                "❌ Bu kayıt işlemini iptal etme yetkin yok.",
+                ephemeral=True
+            )
+            return
+
+        self.tiklandi = True
+        await interaction.response.edit_message(
+            content="❌ Kayıt iptal edildi.",
+            embed=None,
+            view=None
         )
 
 
@@ -2821,7 +2849,7 @@ async def alltimesil(
 # =========================================================
 
 @bot.command()
-async def aktar(ctx):
+async def aktar(ctx, hedef: str = None):
 
     if not rol_var_mi(
         ctx.author,
@@ -2834,26 +2862,38 @@ async def aktar(ctx):
 
         return
 
-    for user_id, stats in haftalik.items():
+    uye = ctx.message.mentions[0] if ctx.message.mentions else None
 
-        all_time.setdefault(
-            user_id,
-            {}
+    if hedef is not None and not herkes_etiketlendi(ctx, hedef) and uye is None:
+        await ctx.send(
+            "❌ Kullanıcı bulunamadı. Kullanım: `.aktar @kişi` veya `.aktar @everyone`"
         )
+        return
+
+    if uye is not None and not herkes_etiketlendi(ctx, hedef):
+        aktarilacaklar = [(uye.id, haftalik.get(uye.id, {}))]
+    else:
+        aktarilacaklar = list(haftalik.items())
+
+    if not aktarilacaklar:
+        await ctx.send("ℹ️ Aktarılacak haftalık istatistik bulunamadı.")
+        return
+
+    aktarilan_user_ids = []
+
+    for user_id, stats in aktarilacaklar:
+        all_time.setdefault(user_id, {})
 
         for stat, miktar in stats.items():
+            all_time[user_id][stat] = all_time[user_id].get(stat, 0) + miktar
 
-            all_time[
-                user_id
-            ][stat] = (
-                all_time[
-                    user_id
-                ].get(stat, 0)
-                + miktar
-            )
+        aktarilan_user_ids.append(user_id)
+
+    for user_id in aktarilan_user_ids:
+        haftalik.pop(user_id, None)
 
     await ctx.send(
-        "✅ Haftalık istatistikler All Time'a aktarıldı."
+        "✅ Haftalık istatistikler All Time'a aktarıldı ve haftalık veriler silindi."
     )
 
 
