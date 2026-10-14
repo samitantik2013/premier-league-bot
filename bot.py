@@ -60,6 +60,7 @@ db("CREATE TABLE IF NOT EXISTS training(user_id INTEGER PRIMARY KEY, normal INTE
 db("CREATE TABLE IF NOT EXISTS cooldowns(user_id INTEGER, kind TEXT, stamp REAL, PRIMARY KEY(user_id,kind))")
 db("CREATE TABLE IF NOT EXISTS match_usage(match_id TEXT, team TEXT, subs INTEGER DEFAULT 0, PRIMARY KEY(match_id,team))")
 db("CREATE TABLE IF NOT EXISTS rankings(user_id INTEGER PRIMARY KEY, goals INTEGER DEFAULT 0, assists INTEGER DEFAULT 0, clean_sheets INTEGER DEFAULT 0)")
+db("CREATE TABLE IF NOT EXISTS ranking_events(user_id INTEGER NOT NULL, kind TEXT NOT NULL, created REAL NOT NULL)")
 db("CREATE TABLE IF NOT EXISTS kap_claims(user_id INTEGER PRIMARY KEY, normal INTEGER DEFAULT 0, silver INTEGER DEFAULT 0, gold INTEGER DEFAULT 0, penalty INTEGER DEFAULT 0)")
 
 def norm(s: str) -> str:
@@ -102,8 +103,8 @@ async def help_cmd(ctx):
     e = discord.Embed(title="⚽ Lig Botu Komutları", color=discord.Color.blurple())
     e.description = ("`.macbasla takım1 takım2` · `.tdata @kişi takım` · `.transfer @kişi eski takım yeni takım`\n"
       "`.takımadı` oyuncu listesi · `.livekadroguncelle takım [diziliş] [11 oyuncu/NPC]` · `.livekadro [takım]`\n"
-      "`.degisikliktakım çıkan giren` · `.kap` · `.kartolustur @kişi isim` · `.fix @kişi +49 bitiricilik +49 dribbling`\n"
-      "`.s @kişi` kart · `.ekle @kişi nitelik miktar` · `.sil @kişi nitelik miktar` · `.golkralligi/.asistkralligi/.kalecikralligi`\n"
+      "`.degisikliktakım çıkan giren` · `.kap` · `.kart [@kişi]` kart görüntüle · `.kartolustur @kişi isim` · `.fix @kişi +49 bitiricilik +49 dribbling`\n"
+      "`.ekle @kişi nitelik miktar` · `.sil @kişi nitelik miktar` · `.siralama [haftalik]` · `.golkralligi/.asistkralligi/.kalecikralligi`\n"
       "`.antsistem` antrenman paneli")
     await ctx.send(embed=e)
 
@@ -146,12 +147,12 @@ async def macbasla(ctx, first: str, second: str):
             stats=json.loads(card["stats"]); skill=sum(stats.values())/max(1,len(stats))
             chance=max(.16,min(.62,.20+(skill-65)*.008))
             if random.random() < chance:
-                score[team]+=1; db("INSERT INTO goals(user_id,count) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET count=count+1", (scorer["user_id"],))
+                score[team]+=1; db("INSERT INTO ranking_events(user_id,kind,created) VALUES(?,?,?)",(scorer["user_id"],"goal",time.time())); db("INSERT INTO goals(user_id,count) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET count=count+1", (scorer["user_id"],))
                 db("INSERT INTO rankings(user_id,goals) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET goals=goals+1", (scorer["user_id"],))
                 assists=[x for x in squad if x["user_id"] != scorer["user_id"]]
                 assist_note=""
                 if assists and random.random()<.72:
-                    assistant=random.choice(assists); db("INSERT INTO assists(user_id,count) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET count=count+1", (assistant["user_id"],))
+                    assistant=random.choice(assists); db("INSERT INTO ranking_events(user_id,kind,created) VALUES(?,?,?)",(assistant["user_id"],"assist",time.time())); db("INSERT INTO assists(user_id,count) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET count=count+1", (assistant["user_id"],))
                     db("INSERT INTO rankings(user_id,assists) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET assists=assists+1", (assistant["user_id"],))
                     assist_note=f" · Asist: **{assistant['name']}**"
                 events.append(f"`{minute}'` ⚽ **{scorer['name']}** ({TEAMS[team]}){assist_note}")
@@ -216,8 +217,9 @@ async def fix(ctx, member: discord.Member, *, changes: str):
     db("UPDATE players SET stats=?, position=? WHERE user_id=?",(json.dumps(stats,ensure_ascii=False),pos,member.id))
     await ctx.send(f"✅ **{row['name']}** kartı güncellendi · GEN **{round(avg)}** · Pozisyon **{pos}**\n"+" · ".join(updated))
 
-@bot.command(name="s")
-async def show_card(ctx, member: discord.Member):
+@bot.command(name="kart", aliases=["s"])
+async def show_card(ctx, member: discord.Member = None):
+    member = member or ctx.author
     row=player_row(member.id)
     if not row: return await ctx.reply("Kart bulunamadı.")
     import json
@@ -325,6 +327,30 @@ async def goals(ctx): await leaderboard(ctx,"goals","⚽ Gol Krallığı")
 async def assists_cmd(ctx): await leaderboard(ctx,"assists","🅰️ Asist Krallığı")
 @bot.command(name="kalecikralligi",aliases=["clean-sheet","temizsayfa"]) 
 async def clean(ctx): await leaderboard(ctx,"clean_sheets","🧤 Clean Sheet Sıralaması")
+
+@bot.command(name="siralama", aliases=["sıralama", "ranking"])
+async def siralama(ctx, period: str = "genel"):
+    """Show combined player ranking: .siralama or .siralama haftalik."""
+    period=period.casefold()
+    if period in ("haftalık", "weekly", "haftalik"):
+        since=time.time()-7*24*60*60
+        rows=db("SELECT user_id, SUM(CASE WHEN kind='goal' THEN 3 WHEN kind='assist' THEN 2 ELSE 0 END) AS points, SUM(kind='goal') AS goals, SUM(kind='assist') AS assists FROM ranking_events WHERE created>=? GROUP BY user_id ORDER BY points DESC, goals DESC LIMIT 20",(since,),True)
+        title="📅 Haftalık Oyuncu Sıralaması"
+    elif period in ("genel", "all", "alltime", "tumu", "tümü"):
+        rows=db("SELECT user_id, goals*3+assists*2+clean_sheets AS points, goals, assists, clean_sheets FROM rankings WHERE goals+assists+clean_sheets>0 ORDER BY points DESC, goals DESC LIMIT 20",fetch=True)
+        title="🏆 Genel Oyuncu Sıralaması"
+    else:
+        return await ctx.reply("Kullanım: `.siralama` (genel) veya `.siralama haftalik`")
+    if not rows: return await ctx.reply("Bu dönem için henüz sıralama verisi yok.")
+    lines=[]
+    for i,r in enumerate(rows,1):
+        extra=f"Gol {r['goals']} · Asist {r['assists']}"
+        if 'clean_sheets' in r.keys(): extra+=f" · Clean sheet {r['clean_sheets']}"
+        lines.append(f"**{i}.** <@{r['user_id']}> — **{r['points']} puan** ({extra})")
+    e=discord.Embed(title=title,description="\n".join(lines),color=discord.Color.gold())
+    e.set_footer(text="Gol: 3 puan · Asist: 2 puan · Clean sheet: 1 puan")
+    await ctx.send(embed=e)
+
 async def leaderboard(ctx,field,title):
     if await deny(ctx,STATS_ROLE): return
     rows=db(f"SELECT user_id,{field} AS n FROM rankings WHERE {field}>0 ORDER BY {field} DESC LIMIT 20",fetch=True)
