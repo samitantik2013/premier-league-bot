@@ -110,7 +110,7 @@ async def help_command(ctx):
     e = discord.Embed(title="⚽ FUTBOL RP • KOMUT REHBERİ", description="Komutların başında nokta kullan. Köşeli parantez içi bilgi isteğe bağlıdır.", color=discord.Color.blurple())
     e.add_field(name="🏟️ Maç ve lig", value="`.macbasla takım1 takım2` maç başlat\n`.puan` puan tablosu\n`.siralama [haftalik]` oyuncu sıralaması", inline=False)
     e.add_field(name="👥 Takım ve kadro", value="`.tdata @kişi takım` teknik direktör ata\n`.transfer @kişi eski takım yeni takım`\n`.livekadroguncelle takım diziliş oyuncu1, oyuncu2, ...`\n`.livekadro [takım]`\n`.degisikliktakım çıkan giren` maç sırasında değişiklik\n`.takımadı` takım oyuncuları", inline=False)
-    e.add_field(name="🪪 Oyuncu RP", value="`.kartolustur @kişi pozisyon [oyuncu adı]`\n`.kart [@kişi]`\n`.fix @kişi +10 bitiricilik +5 hiz`\n`.ekle @kişi nitelik miktar` · `.sil @kişi nitelik miktar`", inline=False)
+    e.add_field(name="🪪 Oyuncu RP", value="`.kartolustur @kişi pozisyon [oyuncu adı]`\n`.kart [@kişi]`\n`.fix @kişi +10 bitiricilik +5 hiz`\n`.ekle/.sil @kişi nitelik miktar`\n`.golekle/.golsil @kişi [adet]`\n`.asistekle/.asistsil @kişi [adet]`\n`.golyenmeyenmakekle/.golyenmeyenmaksil @kişi [adet]`", inline=False)
     e.add_field(name="📨 Diğer", value="`.kap` yetkili başvuru formu\n`.yardim` bu rehber", inline=False)
     e.set_footer(text="Canlı maçlar yaklaşık 20 saniyede oynanır. Maç sırasında değişiklik için ilgili komutu kullan.")
     await ctx.send(embed=e)
@@ -208,6 +208,49 @@ async def add_stat(ctx, member: discord.Member, attribute: str, amount: int):
 async def remove_stat(ctx, member: discord.Member, attribute: str, amount: int):
     if await require(ctx, STAT_ROLE): await change_attribute(ctx, member, attribute, -abs(amount))
 
+async def adjust_career_stat(ctx, member, field, event_kind, amount):
+    if not await require(ctx, STAT_ROLE): return
+    amount=max(1,min(100,abs(amount)))
+    query("INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)",(member.id,))
+    row=query("SELECT * FROM player_stats WHERE user_id=?",(member.id,),one=True)
+    current=row[field]
+    new=max(0,current+amount)
+    actual=new-current
+    if actual==0: return await ctx.reply("Bu istatistik zaten 0.")
+    query(f"UPDATE player_stats SET {field}=? WHERE user_id=?",(new,member.id))
+    for _ in range(actual): query("INSERT INTO events(user_id,kind,created) VALUES(?,?,?)",(member.id,event_kind,int(time.time())))
+    label={"goals":"gol","assists":"asist","clean_sheets":"gol yemeden maç"}[field]
+    await ctx.send(f"✅ {member.mention} · {label}: **{current} → {new}** (+{actual})")
+    await stat_log(ctx.guild,f"📊 {ctx.author.mention}, {member.mention} oyuncusunun {label} sayısını {current} → {new} yaptı.")
+
+async def remove_career_stat(ctx, member, field, event_kind, amount):
+    if not await require(ctx, STAT_ROLE): return
+    amount=max(1,min(100,abs(amount)))
+    query("INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)",(member.id,))
+    row=query("SELECT * FROM player_stats WHERE user_id=?",(member.id,),one=True)
+    current=row[field]
+    actual=min(current,amount)
+    if actual==0: return await ctx.reply("Bu istatistik zaten 0.")
+    query(f"UPDATE player_stats SET {field}=? WHERE user_id=?",(current-actual,member.id))
+    # Remove the newest matching RP events so weekly totals follow manual corrections too.
+    query("DELETE FROM events WHERE id IN (SELECT id FROM events WHERE user_id=? AND kind=? ORDER BY created DESC,id DESC LIMIT ?)",(member.id,event_kind,actual))
+    label={"goals":"gol","assists":"asist","clean_sheets":"gol yemeden maç"}[field]
+    await ctx.send(f"✅ {member.mention} · {label}: **{current} → {current-actual}** (-{actual})")
+    await stat_log(ctx.guild,f"📊 {ctx.author.mention}, {member.mention} oyuncusunun {label} sayısını {current} → {current-actual} yaptı.")
+
+@bot.command(name="golekle")
+async def goal_add(ctx, member: discord.Member, amount: int = 1): await adjust_career_stat(ctx,member,"goals","goal",amount)
+@bot.command(name="golsil")
+async def goal_remove(ctx, member: discord.Member, amount: int = 1): await remove_career_stat(ctx,member,"goals","goal",amount)
+@bot.command(name="asistekle")
+async def assist_add(ctx, member: discord.Member, amount: int = 1): await adjust_career_stat(ctx,member,"assists","assist",amount)
+@bot.command(name="asistsil")
+async def assist_remove(ctx, member: discord.Member, amount: int = 1): await remove_career_stat(ctx,member,"assists","assist",amount)
+@bot.command(name="golyenmeyenmakekle", aliases=["cleanekle"])
+async def clean_add(ctx, member: discord.Member, amount: int = 1): await adjust_career_stat(ctx,member,"clean_sheets","clean_sheet",amount)
+@bot.command(name="golyenmeyenmaksil", aliases=["cleansil"])
+async def clean_remove(ctx, member: discord.Member, amount: int = 1): await remove_career_stat(ctx,member,"clean_sheets","clean_sheet",amount)
+
 @bot.command(name="livekadroguncelle")
 async def update_lineup(ctx, team: str, formation: str, *, members: str = ""):
     key = resolve_team(team)
@@ -261,34 +304,59 @@ async def start_match(ctx, first: str, second: str):
     if slot in active_matches: return await ctx.reply("Bu kanalda zaten canlı bir maç var.")
     match={"home":home,"away":away,"score":{home:0,away:0},"squads":{home:roster_for(home),away:roster_for(away)},"subs":{home:0,away:0},"minute":0,"events":[]}
     active_matches[slot]=match
-    message=await ctx.send(embed=match_embed(match))
+    await ctx.send(embed=match_embed(match))
     try:
-        for minute in range(10, 91, 10):
-            await asyncio.sleep(2)
+        delay=max(0.5,float(os.getenv("MATCH_MINUTE_SECONDS","1")))
+        for minute in range(1,91):
             match["minute"]=minute
-            team=random.choice([home,away]); opponent=away if team==home else home
-            scorer=random.choice(match["squads"][team]); rating=name_rating(scorer)
-            goal_chance=max(.13,min(.54,.24+(rating-60)*.008))
-            if random.random()<goal_chance:
-                match["score"][team]+=1
-                text=f"`{minute}'` ⚽ **{scorer}** golü buldu! ({TEAMS[team]})"
-                player=query("SELECT user_id FROM players WHERE name=? COLLATE NOCASE LIMIT 1",(scorer,),one=True)
-                if player:
-                    query("INSERT INTO player_stats(user_id,goals) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET goals=goals+1",(player["user_id"],))
-                    query("INSERT INTO events(user_id,kind,created) VALUES(?,?,?)",(player["user_id"],"goal",int(time.time())))
-                if random.random()<.62:
-                    assists=[n for n in match["squads"][team] if n!=scorer and n!="NPC"]
-                    if assists:
-                        assister=random.choice(assists); text+=f" · Asist: **{assister}**"
-                        player=query("SELECT user_id FROM players WHERE name=? COLLATE NOCASE LIMIT 1",(assister,),one=True)
-                        if player:
-                            query("INSERT INTO player_stats(user_id,assists) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET assists=assists+1",(player["user_id"],))
-                            query("INSERT INTO events(user_id,kind,created) VALUES(?,?,?)",(player["user_id"],"assist",int(time.time())))
+            if minute==1:
+                text=f"`1'` 🏁 Hakem düdüğünü çaldı. **{TEAMS[home]}** santrayı yaptı."
+            elif minute==45:
+                text=f"`45'` ⏸️ İlk yarı sona erdi. Devre skoru: **{match['score'][home]} - {match['score'][away]}**."
+            elif minute==90:
+                text=f"`90'` 🏁 Son düdük! Maç **{match['score'][home]} - {match['score'][away]}** sona erdi."
             else:
-                text=f"`{minute}'` 🧤 {TEAMS[opponent]} savunması atağı durdurdu."
+                team=random.choice([home,away]); opponent=away if team==home else home
+                squad=match["squads"][team]; rival=match["squads"][opponent]
+                actor=random.choice(squad); defender=random.choice(rival)
+                event=random.choices(["pass","attack","shot","foul","corner","defence"],[34,21,14,10,7,14],k=1)[0]
+                if event=="pass":
+                    text=f"`{minute}'` 🔁 **{actor}** orta sahada pas bağlantısını kurdu."
+                elif event=="attack":
+                    text=f"`{minute}'` ⚡ **{TEAMS[team]}** hızlı hücuma çıktı; **{actor}** topu taşıyor."
+                elif event=="foul":
+                    text=f"`{minute}'` 🟨 **{defender}** faul yaptı. {TEAMS[team]} serbest vuruş kullanacak."
+                elif event=="corner":
+                    text=f"`{minute}'` 🚩 Korner **{TEAMS[team]}** lehine. Ceza sahasına orta geliyor..."
+                elif event=="defence":
+                    text=f"`{minute}'` 🛡️ **{defender}** araya girdi ve tehlikeyi uzaklaştırdı."
+                else:
+                    shooter=random.choice(squad); keeper=random.choice(rival)
+                    rating=name_rating(shooter)
+                    goal_chance=max(.10,min(.36,.20+(rating-60)*.006))
+                    if random.random()<goal_chance:
+                        match["score"][team]+=1
+                        text=f"`{minute}'` ⚽ GOL! **{shooter}** ağları buldu! **{match['score'][home]} - {match['score'][away]}**"
+                        scorer_row=query("SELECT user_id FROM players WHERE name=? COLLATE NOCASE LIMIT 1",(shooter,),one=True)
+                        if scorer_row:
+                            query("INSERT INTO player_stats(user_id,goals) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET goals=goals+1",(scorer_row["user_id"],))
+                            query("INSERT INTO events(user_id,kind,created) VALUES(?,?,?)",(scorer_row["user_id"],"goal",int(time.time())))
+                        possible=[n for n in squad if n not in (shooter,"NPC")]
+                        if possible and random.random()<.65:
+                            assistant=random.choice(possible); text+=f" · Asist: **{assistant}**"
+                            assist_row=query("SELECT user_id FROM players WHERE name=? COLLATE NOCASE LIMIT 1",(assistant,),one=True)
+                            if assist_row:
+                                query("INSERT INTO player_stats(user_id,assists) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET assists=assists+1",(assist_row["user_id"],))
+                                query("INSERT INTO events(user_id,kind,created) VALUES(?,?,?)",(assist_row["user_id"],"assist",int(time.time())))
+                    elif random.random()<.55:
+                        text=f"`{minute}'` 🧤 **{keeper}** harika kurtardı! {shooter} gole çok yaklaştı."
+                    else:
+                        text=f"`{minute}'` 🎯 **{shooter}** şutunu çekti, top auta çıktı."
             match["events"].append(text)
-            await message.edit(embed=match_embed(match))
-        await message.edit(embed=match_embed(match, final=True))
+            # One new channel message for every in-game minute, as requested.
+            await ctx.send(text)
+            if minute<90: await asyncio.sleep(delay)
+        await ctx.send(embed=match_embed(match, final=True))
         save_result(match)
         await stat_log(ctx.guild, f"🏟️ {TEAMS[home]} {match['score'][home]}–{match['score'][away]} {TEAMS[away]}")
     finally:
