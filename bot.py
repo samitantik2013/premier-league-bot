@@ -35,6 +35,12 @@ ALIASES = {"mancity": "manchestercity", "city": "manchestercity", "astonvila": "
            "cp": "crystalpalace"}
 POSITIONS = ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CAM", "RW", "ST", "LW"]
 ATTRS = ["bitiricilik", "dribbling", "kisa_pas", "uzun_pas", "ara_pasi", "sut", "top_kapma", "hiz", "fizik", "refleks"]
+POSITION_NAMES = {
+    "sagbek": "Sağ Bek", "solbek": "Sol Bek", "stoper": "Stoper", "kaleci": "Kaleci",
+    "ortasaha": "Orta Saha", "defansifortasaha": "Defansif Orta Saha",
+    "ofansifortasaha": "Ofansif Orta Saha", "solkanat": "Sol Kanat",
+    "sagkanat": "Sağ Kanat", "santrafor": "Santrafor",
+}
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -103,7 +109,7 @@ async def help_cmd(ctx):
     e = discord.Embed(title="⚽ Lig Botu Komutları", color=discord.Color.blurple())
     e.description = ("`.macbasla takım1 takım2` · `.tdata @kişi takım` · `.transfer @kişi eski takım yeni takım`\n"
       "`.takımadı` oyuncu listesi · `.livekadroguncelle takım [diziliş] [11 oyuncu/NPC]` · `.livekadro [takım]`\n"
-      "`.degisikliktakım çıkan giren` · `.kap` · `.kart [@kişi]` kart görüntüle · `.kartolustur @kişi isim` · `.fix @kişi +49 bitiricilik +49 dribbling`\n"
+      "`.degisikliktakım çıkan giren` · `.kap` · `.kart [@kişi]` kart görüntüle · `.kartolustur @kişi pozisyon [isim]` · `.fix @kişi +49 bitiricilik +49 dribbling`\n"
       "`.ekle @kişi nitelik miktar` · `.sil @kişi nitelik miktar` · `.siralama [haftalik]` · `.golkralligi/.asistkralligi/.kalecikralligi`\n"
       "`.antsistem` antrenman paneli")
     await ctx.send(embed=e)
@@ -189,12 +195,20 @@ class KapOpenView(discord.ui.View):
         await interaction.response.send_modal(KapModal())
 
 @bot.command(name="kartolustur")
-async def kartolustur(ctx, member: discord.Member, *, name: str = ""):
+async def kartolustur(ctx, member: discord.Member, *, details: str = ""):
     if await deny(ctx, CARD_ROLE): return
-    name=name.strip() or member.display_name
+    parts=details.strip().split(maxsplit=1)
+    position_key=norm(parts[0]) if parts else ""
+    if position_key not in POSITION_NAMES:
+        choices=" · ".join(POSITION_NAMES.values())
+        return await ctx.reply(f"Pozisyon seçmelisin. Kullanım: `.kartolustur @kişi sagbek [oyuncu adı]`\nPozisyonlar: {choices}")
+    position=POSITION_NAMES[position_key]
+    name=(parts[1].strip() if len(parts)>1 else "") or member.display_name
     if player_row(member.id): return await ctx.reply("Bu oyuncunun kartı zaten var.")
-    db("INSERT INTO players(user_id,name,stats) VALUES(?,?,?)", (member.id,name,'{"bitiricilik":65,"dribbling":65,"kisa_pas":65,"uzun_pas":65,"ara_pasi":65,"sut":65,"top_kapma":65,"hiz":65,"fizik":65,"refleks":65}'))
-    await ctx.send(f"🪪 {member.mention} için **{name}** kartı oluşturuldu. Gen: **{random.choice(['ST','LW','RW','CAM','CM','CDM','CB','LB','RB','GK'])}** (profil başlangıç pozisyonu).")
+    stats={attr:50 for attr in ATTRS}
+    import json
+    db("INSERT INTO players(user_id,name,position,stats) VALUES(?,?,?,?)", (member.id,name,position,json.dumps(stats,ensure_ascii=False)))
+    await ctx.send(f"🪪 {member.mention} için **{name}** kartı oluşturuldu. Pozisyon: **{position}** · GEN: **50**")
 
 @bot.command(name="fix")
 async def fix(ctx, member: discord.Member, *, changes: str):
@@ -213,9 +227,8 @@ async def fix(ctx, member: discord.Member, *, changes: str):
             stats[k]=min(99, max(1, stats.get(k,65)+int(amount))); updated.append(f"{k}: {stats[k]}")
     if not updated: return await ctx.reply("Nitelik adlarını tanıyamadım.")
     vals=list(stats.values()); avg=sum(vals)/len(vals)
-    pos="ST" if stats["bitiricilik"]+stats["sut"]+stats["hiz"]>stats["top_kapma"]*2 else "CB" if stats["top_kapma"]+stats["fizik"]>stats["bitiricilik"]+stats["sut"] else "CM"
-    db("UPDATE players SET stats=?, position=? WHERE user_id=?",(json.dumps(stats,ensure_ascii=False),pos,member.id))
-    await ctx.send(f"✅ **{row['name']}** kartı güncellendi · GEN **{round(avg)}** · Pozisyon **{pos}**\n"+" · ".join(updated))
+    db("UPDATE players SET stats=? WHERE user_id=?",(json.dumps(stats,ensure_ascii=False),member.id))
+    await ctx.send(f"✅ **{row['name']}** kartı güncellendi · GEN **{round(avg)}** · Pozisyon **{row['position'] or 'Belirlenmedi'}**\n"+" · ".join(updated))
 
 @bot.command(name="kart", aliases=["s"])
 async def show_card(ctx, member: discord.Member = None):
@@ -225,6 +238,7 @@ async def show_card(ctx, member: discord.Member = None):
     import json
     stats=json.loads(row["stats"]); e=discord.Embed(title=f"🪪 {row['name']}", color=discord.Color.blue())
     e.add_field(name="Pozisyon",value=row["position"] or "Belirlenmedi",inline=True)
+    e.add_field(name="GEN",value=str(round(sum(stats.values())/max(1,len(stats)))),inline=True)
     e.add_field(name="Takım",value=TEAMS.get(row["team"],"Takımsız"),inline=True)
     e.add_field(name="Nitelikler",value="\n".join(f"{k.replace('_',' ').title()}: **{v}**" for k,v in stats.items()),inline=False)
     e.add_field(name="Kariyer",value=f"Gol {stat_value(member.id,'goals')} · Asist {stat_value(member.id,'assists')} · Clean sheet {stat_value(member.id,'clean_sheets')}",inline=False)
